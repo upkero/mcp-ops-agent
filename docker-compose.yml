@@ -1,0 +1,27 @@
+# This service is intentionally standalone — it has NO database of its own.
+# It reaches two external dependencies configured via .env:
+#   * ops-core-api (OPS_CORE_BASE_URL) — the operations data backend
+#   * an OpenAI-compatible LLM (LLM_* )  — e.g. OpenAI or a local Ollama
+#
+# ops-core-api runs from its own repository/compose. To let this agent reach it,
+# put both on the SAME external docker network and point OPS_CORE_BASE_URL at the
+# ops-core-api service name (e.g. http://api:8000). Create the network once:
+#   docker network create ops-net
+# and start ops-core-api attached to it. When ops-core-api runs on the host
+# instead, set OPS_CORE_BASE_URL=http://host.docker.internal:8000.
+services:
+  mcp-ops-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ops-net
+    restart: unless-stopped
+
+networks:
+  ops-net:
+    external: true
