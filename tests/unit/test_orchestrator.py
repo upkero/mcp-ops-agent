@@ -34,13 +34,13 @@ async def test_compound_request_streams_two_tool_calls_then_final() -> None:
                 ToolCall(
                     id="c1",
                     name="check_calendar_availability",
-                    arguments='{"args": {"date": "2026-07-25", "time": "18:00", "resource_type": "table"}}',
+                    arguments='{"date": "2026-07-25", "time": "18:00", "resource_type": "table"}',
                 ),
             ),
         ),
         LLMResponse(
             content="",
-            tool_calls=(ToolCall(id="c2", name="lookup_customer", arguments='{"args": {"name_or_id": "Anna"}}'),),
+            tool_calls=(ToolCall(id="c2", name="lookup_customer", arguments='{"name_or_id": "Anna"}'),),
         ),
         LLMResponse(content="The 18:00 table is free and I found Anna Petrova."),
     ]
@@ -65,7 +65,7 @@ async def test_arguments_are_parsed_from_json_before_the_call() -> None:
     responses = [
         LLMResponse(
             content="",
-            tool_calls=(ToolCall(id="c1", name="lookup_customer", arguments='{"args": {"name_or_id": "Anna"}}'),),
+            tool_calls=(ToolCall(id="c1", name="lookup_customer", arguments='{"name_or_id": "Anna"}'),),
         ),
         LLMResponse(content="done"),
     ]
@@ -75,14 +75,14 @@ async def test_arguments_are_parsed_from_json_before_the_call() -> None:
     [event async for event in orchestrator.run("find Anna")]
 
     # The raw JSON string became a dict argument for the MCP call.
-    assert session.calls[0][1] == {"args": {"name_or_id": "Anna"}}
+    assert session.calls[0][1] == {"name_or_id": "Anna"}
 
 
 async def test_step_limit_stops_the_loop_with_an_error_event() -> None:
     # The model keeps asking for tools forever; the loop must stop at max_steps.
     looping = LLMResponse(
         content="",
-        tool_calls=(ToolCall(id="c", name="lookup_customer", arguments='{"args": {"name_or_id": "x"}}'),),
+        tool_calls=(ToolCall(id="c", name="lookup_customer", arguments='{"name_or_id": "x"}'),),
     )
     outcomes = {"lookup_customer": ToolCallOutcome(content="{}", is_error=False)}
     orchestrator, _ = _orchestrator(responses=[looping], outcomes=outcomes, max_steps=2)

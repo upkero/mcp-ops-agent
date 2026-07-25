@@ -119,13 +119,13 @@ curl -N -X POST http://localhost:8000/mcp-tools/invoke \
 
 ```text
 event: tool_call
-data: {"id":"call_1","name":"check_calendar_availability","arguments":{"args":{"date":"2026-07-26","time":"18:00","resource_type":"table"}}}
+data: {"id":"call_1","name":"check_calendar_availability","arguments":{"date":"2026-07-26","time":"18:00","resource_type":"table"}}
 
 event: tool_result
 data: {"id":"call_1","name":"check_calendar_availability","content":"{\"available\": true, \"capacity\": 4, ...}","is_error":false}
 
 event: tool_call
-data: {"id":"call_2","name":"lookup_customer","arguments":{"args":{"name_or_id":"Anna Petrova"}}}
+data: {"id":"call_2","name":"lookup_customer","arguments":{"name_or_id":"Anna Petrova"}}
 
 event: tool_result
 data: {"id":"call_2","name":"lookup_customer","content":"{\"count\": 1, ...}","is_error":false}

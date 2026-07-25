@@ -82,14 +82,14 @@ def _build_container(port: int) -> ApplicationContainer:
                     ToolCall(
                         id="c1",
                         name="check_calendar_availability",
-                        arguments='{"args": {"date": "2026-07-25", "time": "18:00", "resource_type": "table"}}',
+                        arguments='{"date": "2026-07-25", "time": "18:00", "resource_type": "table"}',
                     ),
                 ),
             ),
             LLMResponse(
                 content="",
                 tool_calls=(
-                    ToolCall(id="c2", name="lookup_customer", arguments='{"args": {"name_or_id": "Anna"}}'),
+                    ToolCall(id="c2", name="lookup_customer", arguments='{"name_or_id": "Anna"}'),
                 ),
             ),
             LLMResponse(content="The 18:00 table is free and I found Anna Petrova."),

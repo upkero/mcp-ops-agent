@@ -1,4 +1,5 @@
-"""Fast, hermetic check that tools route to services over genuine MCP JSON-RPC.
+"""Tools route to services over genuine MCP JSON-RPC, and bad arguments are
+rejected by the protocol before any service runs.
 
 Uses the SDK's in-memory client<->server transport, so no network is involved —
 but the request still travels the real MCP protocol into the FastMCP server and
@@ -7,6 +8,7 @@ out to a service backed by a mocked repository.
 
 from unittest.mock import AsyncMock
 
+import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
 from src.app.bootstrap.container import ApplicationContainer
@@ -49,7 +51,7 @@ async def test_tool_call_routes_through_to_the_service() -> None:
     async with create_connected_server_and_client_session(server._mcp_server) as session:
         result = await session.call_tool(
             "check_calendar_availability",
-            {"args": {"date": "2026-07-25", "time": "18:00", "resource_type": "table"}},
+            {"date": "2026-07-25", "time": "18:00", "resource_type": "table"},
         )
 
     assert result.isError is False
@@ -58,14 +60,25 @@ async def test_tool_call_routes_through_to_the_service() -> None:
     assert result.structuredContent["capacity"] == 4
 
 
-async def test_invalid_arguments_are_rejected_by_the_protocol() -> None:
+# Each case is a call the model must NOT be able to make: FastMCP validates the
+# typed tool arguments and returns an error result before the service is reached.
+_INVALID_CALLS = [
+    ("check_calendar_availability", {"date": "2026-07-25", "time": "18:00", "resource_type": "spaceship"}),
+    ("check_calendar_availability", {"date": "not-a-date", "time": "18:00", "resource_type": "table"}),
+    ("calculate_quote", {"service": "Deep Tissue Massage", "quantity": 0}),
+    ("calculate_quote", {"service": "", "quantity": 1}),
+    ("lookup_customer", {"name_or_id": ""}),
+    ("send_notification", {"recipient": "Anna", "message": ""}),
+]
+
+
+@pytest.mark.parametrize(("tool_name", "arguments"), _INVALID_CALLS)
+async def test_invalid_arguments_are_rejected_by_the_protocol(
+    tool_name: str, arguments: dict[str, object]
+) -> None:
     server = build_mcp_server(ApplicationContainer())
 
     async with create_connected_server_and_client_session(server._mcp_server) as session:
-        result = await session.call_tool(
-            "check_calendar_availability",
-            {"args": {"date": "2026-07-25", "time": "18:00", "resource_type": "spaceship"}},
-        )
+        result = await session.call_tool(tool_name, arguments)
 
-    # Bad enum value never reaches the service — FastMCP validation flags an error.
     assert result.isError is True
