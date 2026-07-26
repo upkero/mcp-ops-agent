@@ -11,6 +11,7 @@ async def retry_async[T](
     attempts: int,
     base_delay: float,
     retry_on: tuple[type[Exception], ...],
+    delay_for: Callable[[Exception], float | None] | None = None,
 ) -> T:
     """Run ``operation`` with exponential-backoff retries — a reusable resilience util.
 
@@ -19,7 +20,9 @@ async def retry_async[T](
     loops. Only ``retry_on`` exception types are retried; anything else propagates
     immediately. After ``attempts`` failures the last exception is re-raised.
 
-    Sleeps ``base_delay * 2**n`` between attempts (n = 0-based retry index).
+    Sleeps ``base_delay * 2**n`` between attempts (n = 0-based retry index), unless
+    ``delay_for`` returns a value for the raised exception — used to honour a
+    server-provided ``Retry-After`` without teaching this util about HTTP.
     """
     if attempts < 1:
         raise ValueError("attempts must be >= 1")
@@ -33,6 +36,8 @@ async def retry_async[T](
             if attempt + 1 >= attempts:
                 break
             delay = base_delay * (2**attempt)
+            if delay_for is not None and (override := delay_for(exc)) is not None:
+                delay = override
             logger.warning(
                 "outbound call failed; retrying",
                 extra={
