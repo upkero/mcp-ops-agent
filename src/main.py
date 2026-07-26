@@ -31,7 +31,6 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.container = container
         # Mounted sub-apps do not receive Starlette lifespan events, so the MCP
         # session manager must be run here for the /mcp endpoint to serve requests.
         async with mcp_server.session_manager.run():
@@ -41,6 +40,9 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
                 await container.close()
 
     app = FastAPI(title="MCP Ops Agent", version="0.1.0", lifespan=lifespan)
+    # Set on state here (not only in the lifespan) so the app is usable under an
+    # ASGI transport that does not run the lifespan (e.g. httpx.ASGITransport tests).
+    app.state.container = container
 
     settings = get_app_settings()
     app.add_middleware(

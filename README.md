@@ -134,10 +134,20 @@ event: final
 data: {"content":"The 18:00 table is free tomorrow (seats 4), and I found Anna Petrova (active)."}
 ```
 
-**Health:**
+**Health** — a single readiness check that reports both upstreams (200 when both are
+reachable, 503 otherwise):
 
 ```bash
-curl http://localhost:8000/health/live      # {"status":"ok"}
+curl http://localhost:8000/health      # {"status":"ok","llm":true,"ops_core":true}
+```
+
+**Optional auth** — leave it open for the demo, or set `SECURITY_API_KEY` (≥16 chars) to
+require `X-API-Key` on `POST /mcp-tools/invoke`:
+
+```bash
+curl -N -X POST http://localhost:8000/mcp-tools/invoke \
+  -H "X-API-Key: $SECURITY_API_KEY" -H "Content-Type: application/json" \
+  -d '{"message":"..."}'
 ```
 
 ## Connect an external MCP client to `/mcp`
@@ -194,6 +204,7 @@ All via environment (see [`.env.example`](.env.example)); grouped by prefix:
 | `LLM_` | Provider, model, key, base URL — OpenAI-compatible; the demo defaults to OpenAI. |
 | `OPS_CORE_` | `ops-core-api` base URL, `X-API-Key`, timeout, retries. |
 | `AGENT_` | `MAX_STEPS`, and `MCP_SELF_URL` (the orchestrator's loopback to `/mcp`). |
+| `SECURITY_` | Optional `API_KEY` gating `POST /mcp-tools/invoke` (unset = open). |
 
 ---
 

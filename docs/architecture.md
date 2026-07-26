@@ -72,7 +72,16 @@ adapters share a single client built by `repositories/ops_core/client.py`. The
 ## Errors
 
 Typed exceptions inherit `BaseAppException` (`status_code` / `error_code` / `detail`). The
-ops-core adapters map transport/5xx failures to `OpsCoreUnavailableError` (502) and a 404
-to `OpsCoreNotFoundError`. Because the SSE response has already started when the loop
-runs, failures during a run are delivered as a terminal `error` **event**, not an HTTP
-error status.
+shared `ops_core_get` helper retries transport errors, 5xx, and 429/503 (honouring
+`Retry-After`), maps a surviving 404 to `OpsCoreNotFoundError` and any other error
+response to `OpsCoreUnavailableError` (502). Because the SSE response has already started
+when the loop runs, failures during a run are delivered as a terminal `error` **event**,
+not an HTTP error status.
+
+## Operational surface
+
+- `GET /health` — a single readiness check that pings both upstreams (LLM +
+  ops-core-api via `OpsCoreHealthChecker`) and returns 503 when either is down.
+- `POST /mcp-tools/invoke` is gated by an optional `X-API-Key` (`SECURITY_API_KEY`): open
+  when unset (demo / MCP-client friendly), required when set. `/mcp` is left to the MCP
+  protocol's own auth story and stays open here, so the self-loopback needs no key.

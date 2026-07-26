@@ -11,6 +11,7 @@ from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.notifications.channel import NotificationChannel
 from src.app.interfaces.ops_core.availability import AvailabilityRepository
 from src.app.interfaces.ops_core.customers import CustomerRepository
+from src.app.interfaces.ops_core.health import OpsCoreHealthChecker
 from src.app.interfaces.ops_core.pricing import PricingRepository
 from src.app.llm.factory import create_llm_client
 from src.app.repositories.agent.mcp_tool_gateway import McpToolGateway
@@ -18,6 +19,7 @@ from src.app.repositories.notifications.simulated_channel import SimulatedNotifi
 from src.app.repositories.ops_core.availability_repository import OpsCoreAvailabilityRepository
 from src.app.repositories.ops_core.client import create_ops_core_http_client
 from src.app.repositories.ops_core.customer_repository import OpsCoreCustomerRepository
+from src.app.repositories.ops_core.health_probe import OpsCoreHealthProbe
 from src.app.repositories.ops_core.pricing_repository import OpsCorePricingRepository
 from src.app.services.booking_service import BookingService
 from src.app.services.customer_service import CustomerService
@@ -64,6 +66,10 @@ class ApplicationContainer:
             client=self._ops_core_client,
             max_retries=get_ops_core_settings().max_retries,
         )
+
+    @cached_property
+    def ops_core_health_probe(self) -> OpsCoreHealthChecker:
+        return OpsCoreHealthProbe(client=self._ops_core_client)
 
     @cached_property
     def notification_channel(self) -> NotificationChannel:
