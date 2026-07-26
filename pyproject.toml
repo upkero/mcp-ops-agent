@@ -2,6 +2,10 @@
 name = "mcp-ops-agent"
 version = "0.1.0"
 description = "Real MCP (FastMCP) server over ops-core-api with a self-consuming agentic orchestrator"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "upkero" }]
+keywords = ["mcp", "model-context-protocol", "fastmcp", "ai-agent", "fastapi"]
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.115.0",

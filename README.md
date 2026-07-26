@@ -1,5 +1,9 @@
 # MCP Ops Agent
 
+[![CI](https://github.com/upkero/mcp-ops-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/upkero/mcp-ops-agent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+
 A **real [Model Context Protocol](https://modelcontextprotocol.io) server** (built on
 FastMCP from the official MCP Python SDK) for a wellness-clinic operations desk, plus a
 self-consuming **agentic orchestrator** that reaches those tools the same way any
