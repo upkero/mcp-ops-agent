@@ -7,19 +7,19 @@ import httpx
 
 from src.app.contracts.ops_core.availability_slot import AvailabilitySlot
 from src.app.contracts.ops_core.enums import ResourceType
-from src.app.interfaces.ops_core.availability import AvailabilityRepository
-from src.app.repositories.ops_core.base import ops_core_get
+from src.app.gateways.ops_core.base import ops_core_get
+from src.app.interfaces.ops_core.availability import AvailabilityGateway
 
 logger = logging.getLogger(__name__)
 
 
-class OpsCoreAvailabilityRepository(AvailabilityRepository):
-    """Adapter: ops-core-api GET /booking-slots behind AvailabilityRepository.
+class OpsCoreAvailabilityGateway(AvailabilityGateway):
+    """Adapter: ops-core-api GET /booking-slots behind AvailabilityGateway.
 
     Adapter pattern — wraps the shared httpx client and translates ops-core-api's
-    wire schema into AvailabilitySlot contracts, so the booking service sees the
-    same interface a direct-DB repository would expose. Every HTTP concern (URL,
-    params, JSON shape) is contained here and never leaks upward.
+    wire schema into AvailabilitySlot contracts, so the availability service sees
+    the same interface a direct-DB repository would expose. Every HTTP concern
+    (URL, params, JSON shape) is contained here and never leaks upward.
     """
 
     _PATH = "/api/v1/booking-slots"

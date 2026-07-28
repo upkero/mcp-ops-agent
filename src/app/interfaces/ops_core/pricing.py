@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 from src.app.contracts.ops_core.price_quote import PriceQuote
 
 
-class PricingRepository(ABC):
-    """Repository-style abstraction over service pricing."""
+class PricingGateway(ABC):
+    """Port for service pricing, shaped like plain data access."""
 
     @abstractmethod
     async def quote(self, service: str, quantity: int) -> PriceQuote:

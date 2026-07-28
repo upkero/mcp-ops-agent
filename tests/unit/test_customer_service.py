@@ -1,14 +1,14 @@
 from unittest.mock import AsyncMock
 
 from src.app.contracts.ops_core.customer import Customer
-from src.app.interfaces.ops_core.customers import CustomerRepository
-from src.app.services.customer_service import CustomerService
+from src.app.interfaces.ops_core.customers import CustomerGateway
+from src.app.services.customer import CustomerService
 
 _UUID = "123e4567-e89b-12d3-a456-426614174000"
 
 
 def _service() -> tuple[CustomerService, AsyncMock]:
-    repo = AsyncMock(spec=CustomerRepository)
+    repo = AsyncMock(spec=CustomerGateway)
     return CustomerService(customers=repo), repo
 
 

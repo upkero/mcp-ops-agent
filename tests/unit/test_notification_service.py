@@ -1,9 +1,9 @@
 from unittest.mock import AsyncMock
 
 from src.app.contracts.notifications.receipt import NotificationReceipt
+from src.app.gateways.notifications.simulated_channel import SimulatedNotificationChannel
 from src.app.interfaces.notifications.channel import NotificationChannel
-from src.app.repositories.notifications.simulated_channel import SimulatedNotificationChannel
-from src.app.services.notification_service import NotificationService
+from src.app.services.notification import NotificationService
 
 
 async def test_send_delegates_to_channel() -> None:

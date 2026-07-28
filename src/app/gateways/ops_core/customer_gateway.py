@@ -4,12 +4,12 @@ from typing import Any
 import httpx
 
 from src.app.contracts.ops_core.customer import Customer
-from src.app.interfaces.ops_core.customers import CustomerRepository
-from src.app.repositories.ops_core.base import ops_core_get
+from src.app.gateways.ops_core.base import ops_core_get
+from src.app.interfaces.ops_core.customers import CustomerGateway
 
 
-class OpsCoreCustomerRepository(CustomerRepository):
-    """Adapter: ops-core-api /customers behind CustomerRepository.
+class OpsCoreCustomerGateway(CustomerGateway):
+    """Adapter: ops-core-api /customers behind CustomerGateway.
 
     Adapter pattern — translates the wire schema into Customer contracts and maps
     a missing customer (404) to None, so the customer service never sees HTTP.

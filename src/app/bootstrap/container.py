@@ -6,26 +6,26 @@ import httpx
 from src.app.core.settings.agent import get_agent_settings
 from src.app.core.settings.llm import get_llm_settings
 from src.app.core.settings.ops_core import get_ops_core_settings
+from src.app.gateways.agent.mcp_tool_gateway import McpToolGateway
+from src.app.gateways.notifications.simulated_channel import SimulatedNotificationChannel
+from src.app.gateways.ops_core.availability_gateway import OpsCoreAvailabilityGateway
+from src.app.gateways.ops_core.client import create_ops_core_http_client
+from src.app.gateways.ops_core.customer_gateway import OpsCoreCustomerGateway
+from src.app.gateways.ops_core.health_probe import OpsCoreHealthProbe
+from src.app.gateways.ops_core.pricing_gateway import OpsCorePricingGateway
 from src.app.interfaces.agent.tool_gateway import ToolGateway
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.notifications.channel import NotificationChannel
-from src.app.interfaces.ops_core.availability import AvailabilityRepository
-from src.app.interfaces.ops_core.customers import CustomerRepository
+from src.app.interfaces.ops_core.availability import AvailabilityGateway
+from src.app.interfaces.ops_core.customers import CustomerGateway
 from src.app.interfaces.ops_core.health import OpsCoreHealthChecker
-from src.app.interfaces.ops_core.pricing import PricingRepository
+from src.app.interfaces.ops_core.pricing import PricingGateway
 from src.app.llm.factory import create_llm_client
-from src.app.repositories.agent.mcp_tool_gateway import McpToolGateway
-from src.app.repositories.notifications.simulated_channel import SimulatedNotificationChannel
-from src.app.repositories.ops_core.availability_repository import OpsCoreAvailabilityRepository
-from src.app.repositories.ops_core.client import create_ops_core_http_client
-from src.app.repositories.ops_core.customer_repository import OpsCoreCustomerRepository
-from src.app.repositories.ops_core.health_probe import OpsCoreHealthProbe
-from src.app.repositories.ops_core.pricing_repository import OpsCorePricingRepository
-from src.app.services.booking_service import BookingService
-from src.app.services.customer_service import CustomerService
-from src.app.services.notification_service import NotificationService
+from src.app.services.availability import AvailabilityService
+from src.app.services.customer import CustomerService
+from src.app.services.notification import NotificationService
 from src.app.services.orchestrator import OrchestratorService
-from src.app.services.pricing_service import PricingService
+from src.app.services.pricing import PricingService
 
 
 class ApplicationContainer:
@@ -47,22 +47,22 @@ class ApplicationContainer:
         return create_ops_core_http_client(get_ops_core_settings())
 
     @cached_property
-    def availability_repository(self) -> AvailabilityRepository:
-        return OpsCoreAvailabilityRepository(
+    def availability_gateway(self) -> AvailabilityGateway:
+        return OpsCoreAvailabilityGateway(
             client=self._ops_core_client,
             max_attempts=get_ops_core_settings().max_attempts,
         )
 
     @cached_property
-    def customer_repository(self) -> CustomerRepository:
-        return OpsCoreCustomerRepository(
+    def customer_gateway(self) -> CustomerGateway:
+        return OpsCoreCustomerGateway(
             client=self._ops_core_client,
             max_attempts=get_ops_core_settings().max_attempts,
         )
 
     @cached_property
-    def pricing_repository(self) -> PricingRepository:
-        return OpsCorePricingRepository(
+    def pricing_gateway(self) -> PricingGateway:
+        return OpsCorePricingGateway(
             client=self._ops_core_client,
             max_attempts=get_ops_core_settings().max_attempts,
         )
@@ -80,16 +80,16 @@ class ApplicationContainer:
         return McpToolGateway(settings=get_agent_settings())
 
     @cached_property
-    def booking_service(self) -> BookingService:
-        return BookingService(availability=self.availability_repository)
+    def availability_service(self) -> AvailabilityService:
+        return AvailabilityService(availability=self.availability_gateway)
 
     @cached_property
     def customer_service(self) -> CustomerService:
-        return CustomerService(customers=self.customer_repository)
+        return CustomerService(customers=self.customer_gateway)
 
     @cached_property
     def pricing_service(self) -> PricingService:
-        return PricingService(pricing=self.pricing_repository)
+        return PricingService(pricing=self.pricing_gateway)
 
     @cached_property
     def notification_service(self) -> NotificationService:

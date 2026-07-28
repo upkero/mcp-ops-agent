@@ -9,7 +9,7 @@ def create_ops_core_http_client(settings: OpsCoreSettings) -> httpx.AsyncClient:
     """Factory — the only place the ops-core-api HTTP client is constructed.
 
     One shared client (base URL, X-API-Key header, timeout) is injected into every
-    ops-core repository adapter: one connection pool and one auth config for all of
+    ops-core gateway adapter: one connection pool and one auth config for all of
     them (DRY), mirroring how ``create_llm_client`` centralises SDK construction.
     """
     return httpx.AsyncClient(

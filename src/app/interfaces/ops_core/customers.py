@@ -4,8 +4,8 @@ from collections.abc import Sequence
 from src.app.contracts.ops_core.customer import Customer
 
 
-class CustomerRepository(ABC):
-    """Repository-style abstraction over CRM customer access."""
+class CustomerGateway(ABC):
+    """Port for CRM customer access, shaped like plain data access."""
 
     @abstractmethod
     async def get_by_id(self, customer_id: str) -> Customer | None:

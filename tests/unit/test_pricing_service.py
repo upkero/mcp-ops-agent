@@ -5,16 +5,16 @@ import pytest
 
 from src.app.contracts.ops_core.price_quote import PriceQuote
 from src.app.exceptions.ops_core import OpsCoreNotFoundError
-from src.app.interfaces.ops_core.pricing import PricingRepository
-from src.app.services.pricing_service import PricingService
+from src.app.interfaces.ops_core.pricing import PricingGateway
+from src.app.services.pricing import PricingService
 
 
 def _service() -> tuple[PricingService, AsyncMock]:
-    repo = AsyncMock(spec=PricingRepository)
+    repo = AsyncMock(spec=PricingGateway)
     return PricingService(pricing=repo), repo
 
 
-async def test_quote_delegates_to_repository() -> None:
+async def test_quote_delegates_to_the_gateway() -> None:
     service, repo = _service()
     repo.quote.return_value = PriceQuote(
         service_name="Deep Tissue Massage",

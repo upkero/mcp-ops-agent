@@ -3,21 +3,21 @@ from datetime import date, time
 
 from src.app.contracts.ops_core.availability_result import AvailabilityResult
 from src.app.contracts.ops_core.enums import ResourceType
-from src.app.interfaces.ops_core.availability import AvailabilityRepository
+from src.app.interfaces.ops_core.availability import AvailabilityGateway
 
 logger = logging.getLogger(__name__)
 
 
-class BookingService:
+class AvailabilityService:
     """Business logic for calendar availability checks.
 
-    Depends only on the AvailabilityRepository *interface* (Dependency Inversion):
+    Depends only on the AvailabilityGateway *interface* (Dependency Inversion):
     a real HTTP adapter in production, an AsyncMock in unit tests. It turns a raw
     slot list into a decision the agent can act on — matched? available? which
     other times are free — rather than passing the wire data through untouched.
     """
 
-    def __init__(self, *, availability: AvailabilityRepository) -> None:
+    def __init__(self, *, availability: AvailabilityGateway) -> None:
         self._availability = availability
 
     async def check_availability(

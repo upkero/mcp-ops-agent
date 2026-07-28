@@ -3,7 +3,7 @@ rejected by the protocol before any service runs.
 
 Uses the SDK's in-memory client<->server transport, so no network is involved —
 but the request still travels the real MCP protocol into the FastMCP server and
-out to a service backed by a mocked repository.
+out to a service backed by a mocked gateway.
 """
 
 from unittest.mock import AsyncMock
@@ -13,7 +13,7 @@ from mcp.shared.memory import create_connected_server_and_client_session
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.ops_core.availability_slot import AvailabilitySlot
-from src.app.interfaces.ops_core.availability import AvailabilityRepository
+from src.app.interfaces.ops_core.availability import AvailabilityGateway
 from src.app.mcp.v1.server import build_mcp_server
 
 _EXPECTED_TOOLS = {
@@ -25,11 +25,11 @@ _EXPECTED_TOOLS = {
 
 
 def _container_with_slots(slots: list[AvailabilitySlot]) -> ApplicationContainer:
-    repo = AsyncMock(spec=AvailabilityRepository)
+    repo = AsyncMock(spec=AvailabilityGateway)
     repo.list_slots.return_value = slots
     container = ApplicationContainer()
     # Override the cached_property slot before first access (the DI test seam).
-    container.__dict__["availability_repository"] = repo
+    container.__dict__["availability_gateway"] = repo
     return container
 
 

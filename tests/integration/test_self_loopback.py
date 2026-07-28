@@ -22,9 +22,9 @@ from src.app.contracts.llm.tool_call import ToolCall
 from src.app.contracts.ops_core.availability_slot import AvailabilitySlot
 from src.app.contracts.ops_core.customer import Customer
 from src.app.core.settings.agent import AgentSettings
-from src.app.interfaces.ops_core.availability import AvailabilityRepository
-from src.app.interfaces.ops_core.customers import CustomerRepository
-from src.app.repositories.agent.mcp_tool_gateway import McpToolGateway
+from src.app.gateways.agent.mcp_tool_gateway import McpToolGateway
+from src.app.interfaces.ops_core.availability import AvailabilityGateway
+from src.app.interfaces.ops_core.customers import CustomerGateway
 from src.main import create_app
 from tests.fakes import ScriptedLLMClient
 
@@ -66,11 +66,11 @@ def _parse_sse(body: str) -> list[tuple[str, str]]:
 
 
 def _build_container(port: int) -> ApplicationContainer:
-    availability = AsyncMock(spec=AvailabilityRepository)
+    availability = AsyncMock(spec=AvailabilityGateway)
     availability.list_slots.return_value = [
         AvailabilitySlot("s1", "table", "2026-07-25", "18:00:00", 4, True)
     ]
-    customers = AsyncMock(spec=CustomerRepository)
+    customers = AsyncMock(spec=CustomerGateway)
     customers.search.return_value = [Customer("c1", "Anna Petrova", "active", None, None)]
 
     # Scripted agent: check the slot, then look up the customer, then answer.
@@ -97,8 +97,8 @@ def _build_container(port: int) -> ApplicationContainer:
     )
 
     container = ApplicationContainer()
-    container.__dict__["availability_repository"] = availability
-    container.__dict__["customer_repository"] = customers
+    container.__dict__["availability_gateway"] = availability
+    container.__dict__["customer_gateway"] = customers
     container.__dict__["llm_client"] = llm
     # The REAL gateway, pointed at this server's own /mcp over the loopback.
     container.__dict__["tool_gateway"] = McpToolGateway(

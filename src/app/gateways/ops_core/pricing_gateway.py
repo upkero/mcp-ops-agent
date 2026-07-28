@@ -4,12 +4,12 @@ from typing import Any
 import httpx
 
 from src.app.contracts.ops_core.price_quote import PriceQuote
-from src.app.interfaces.ops_core.pricing import PricingRepository
-from src.app.repositories.ops_core.base import ops_core_get
+from src.app.gateways.ops_core.base import ops_core_get
+from src.app.interfaces.ops_core.pricing import PricingGateway
 
 
-class OpsCorePricingRepository(PricingRepository):
-    """Adapter: ops-core-api GET /pricing behind PricingRepository.
+class OpsCorePricingGateway(PricingGateway):
+    """Adapter: ops-core-api GET /pricing behind PricingGateway.
 
     Adapter pattern — parses the wire's money strings into Decimals (never floats)
     and lets an unknown service surface as OpsCoreNotFoundError via the shared GET.

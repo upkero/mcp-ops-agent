@@ -29,7 +29,7 @@ def register(mcp: FastMCP, container: ApplicationContainer) -> None:
         parameters — the schema is never hand-written, and a bad value (unknown
         resource type, malformed date) is rejected before the service runs.
         """
-        result = await container.booking_service.check_availability(
+        result = await container.availability_service.check_availability(
             slot_date=date,
             slot_time=time,
             resource_type=resource_type,

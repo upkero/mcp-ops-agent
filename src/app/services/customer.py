@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from src.app.contracts.ops_core.customer import Customer
-from src.app.interfaces.ops_core.customers import CustomerRepository
+from src.app.interfaces.ops_core.customers import CustomerGateway
 
 logger = logging.getLogger(__name__)
 
@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 class CustomerService:
     """Business logic for customer lookup by name OR id.
 
-    Chooses the right repository call based on the input shape (UUID → direct
+    Chooses the right gateway call based on the input shape (UUID → direct
     fetch, otherwise a name search), and always returns a uniform list so the
-    caller need not care which path ran. Depends on the CustomerRepository
+    caller need not care which path ran. Depends on the CustomerGateway
     interface only (Dependency Inversion).
     """
 
-    def __init__(self, *, customers: CustomerRepository) -> None:
+    def __init__(self, *, customers: CustomerGateway) -> None:
         self._customers = customers
 
     async def lookup(self, name_or_id: str) -> Sequence[Customer]:

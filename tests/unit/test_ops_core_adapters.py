@@ -14,9 +14,9 @@ import httpx
 import pytest
 
 from src.app.exceptions.ops_core import OpsCoreNotFoundError, OpsCoreUnavailableError
-from src.app.repositories.ops_core.availability_repository import OpsCoreAvailabilityRepository
-from src.app.repositories.ops_core.customer_repository import OpsCoreCustomerRepository
-from src.app.repositories.ops_core.pricing_repository import OpsCorePricingRepository
+from src.app.gateways.ops_core.availability_gateway import OpsCoreAvailabilityGateway
+from src.app.gateways.ops_core.customer_gateway import OpsCoreCustomerGateway
+from src.app.gateways.ops_core.pricing_gateway import OpsCorePricingGateway
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -50,7 +50,7 @@ async def test_availability_maps_items_and_sends_params() -> None:
         )
 
     async with _client(handler) as client:
-        repo = OpsCoreAvailabilityRepository(client=client, max_attempts=1)
+        repo = OpsCoreAvailabilityGateway(client=client, max_attempts=1)
         slots = await repo.list_slots(slot_date=date(2026, 7, 25), resource_type="table")
 
     assert seen["path"] == "/api/v1/booking-slots"
@@ -76,7 +76,7 @@ async def test_pricing_parses_money_as_decimal() -> None:
         )
 
     async with _client(handler) as client:
-        repo = OpsCorePricingRepository(client=client, max_attempts=1)
+        repo = OpsCorePricingGateway(client=client, max_attempts=1)
         quote = await repo.quote("Deep Tissue Massage", 6)
 
     assert quote.total == Decimal("648.00")
@@ -90,7 +90,7 @@ async def test_customer_by_id_404_returns_none() -> None:
         return httpx.Response(404, json={"detail": "x", "error_code": "entity_not_found"})
 
     async with _client(handler) as client:
-        repo = OpsCoreCustomerRepository(client=client, max_attempts=1)
+        repo = OpsCoreCustomerGateway(client=client, max_attempts=1)
         assert await repo.get_by_id("missing") is None
 
 
@@ -99,7 +99,7 @@ async def test_pricing_unknown_service_404_raises_not_found() -> None:
         return httpx.Response(404, json={"detail": "x", "error_code": "entity_not_found"})
 
     async with _client(handler) as client:
-        repo = OpsCorePricingRepository(client=client, max_attempts=1)
+        repo = OpsCorePricingGateway(client=client, max_attempts=1)
         with pytest.raises(OpsCoreNotFoundError):
             await repo.quote("No Such Service", 1)
 
@@ -116,7 +116,7 @@ async def test_transient_5xx_is_retried_then_succeeds() -> None:
         return httpx.Response(200, json={"items": []})
 
     async with _client(handler) as client:
-        repo = OpsCoreAvailabilityRepository(client=client, max_attempts=3)
+        repo = OpsCoreAvailabilityGateway(client=client, max_attempts=3)
         slots = await repo.list_slots(slot_date=date(2026, 7, 25), resource_type="table")
 
     assert calls["n"] == 2
@@ -128,7 +128,7 @@ async def test_persistent_5xx_maps_to_unavailable() -> None:
         return httpx.Response(500)
 
     async with _client(handler) as client:
-        repo = OpsCoreAvailabilityRepository(client=client, max_attempts=2)
+        repo = OpsCoreAvailabilityGateway(client=client, max_attempts=2)
         with pytest.raises(OpsCoreUnavailableError):
             await repo.list_slots(slot_date=date(2026, 7, 25), resource_type="table")
 
@@ -141,7 +141,7 @@ async def test_non_retryable_4xx_maps_to_unavailable_without_retry() -> None:
         return httpx.Response(401, json={"detail": "bad key", "error_code": "invalid_api_key"})
 
     async with _client(handler) as client:
-        repo = OpsCoreCustomerRepository(client=client, max_attempts=4)
+        repo = OpsCoreCustomerGateway(client=client, max_attempts=4)
         with pytest.raises(OpsCoreUnavailableError):
             await repo.search("Anna")
 
@@ -159,7 +159,7 @@ async def test_rate_limit_429_is_retried_honouring_retry_after() -> None:
         return httpx.Response(200, json={"items": []})
 
     async with _client(handler) as client:
-        repo = OpsCoreAvailabilityRepository(client=client, max_attempts=3)
+        repo = OpsCoreAvailabilityGateway(client=client, max_attempts=3)
         slots = await repo.list_slots(slot_date=date(2026, 7, 25), resource_type="table")
 
     assert calls["n"] == 2

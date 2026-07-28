@@ -2,14 +2,14 @@ from datetime import date, time
 from unittest.mock import AsyncMock
 
 from src.app.contracts.ops_core.availability_slot import AvailabilitySlot
-from src.app.interfaces.ops_core.availability import AvailabilityRepository
-from src.app.services.booking_service import BookingService
+from src.app.interfaces.ops_core.availability import AvailabilityGateway
+from src.app.services.availability import AvailabilityService
 
 
-def _service(slots: list[AvailabilitySlot]) -> tuple[BookingService, AsyncMock]:
-    repo = AsyncMock(spec=AvailabilityRepository)  # spec => Liskov-safe double
+def _service(slots: list[AvailabilitySlot]) -> tuple[AvailabilityService, AsyncMock]:
+    repo = AsyncMock(spec=AvailabilityGateway)  # spec => Liskov-safe double
     repo.list_slots.return_value = slots
-    return BookingService(availability=repo), repo
+    return AvailabilityService(availability=repo), repo
 
 
 async def test_matched_available_slot_reports_capacity_and_alternatives() -> None:
