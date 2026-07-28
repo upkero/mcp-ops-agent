@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 
 import httpx
 import uvicorn
+from fastapi import FastAPI
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.llm.llm_response import LLMResponse
@@ -38,7 +39,7 @@ def _free_port() -> int:
 
 
 @asynccontextmanager
-async def _serve(app: object, port: int) -> AsyncIterator[str]:
+async def _serve(app: FastAPI, port: int) -> AsyncIterator[str]:
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
     task = asyncio.create_task(server.serve())

@@ -37,9 +37,18 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+explicit_package_bases = true
+mypy_path = "."
+# Teaches mypy that pydantic models synthesise their __init__, so settings
+# classes with required fields are not reported as missing arguments.
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# testpaths says where to look; pythonpath puts the repo root on sys.path.
+# The latter is load-bearing now that tests/ is a namespace package: without
+# it, `from src.app...` no longer resolves by directory-walk side effect.
+testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.coverage.run]

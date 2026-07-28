@@ -84,5 +84,6 @@ class LLMSettings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_llm_settings() -> LLMSettings:
-    # Required fields are populated from the environment; mypy can't see that.
-    return LLMSettings()  # type: ignore[call-arg]
+    # Required fields come from the environment. The pydantic mypy plugin knows
+    # that, so no suppression is needed here.
+    return LLMSettings()
