@@ -47,8 +47,9 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     settings = get_app_settings()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_allow_origins,
-        allow_credentials="*" not in settings.cors_allow_origins,
+        allow_origins=settings.cors_allowed_origins,
+        # Explicitly off: the key travels in a header, no cookie is ever used here.
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
