@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class InvokeRequest(BaseModel):
-    """HTTP-boundary schema for POST /mcp-tools/invoke."""
+    """HTTP-boundary schema for POST /api/v1/invoke."""
 
     message: str = Field(
         min_length=1,

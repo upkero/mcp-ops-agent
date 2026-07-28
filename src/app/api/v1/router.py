@@ -1,10 +1,10 @@
 from fastapi import APIRouter
 
-from src.app.api.v1.routers.mcp_tools import router as mcp_tools_router
+from src.app.api.v1.routers.invoke import router as invoke_router
 
-# Aggregator for the public HTTP surface. Unlike the sibling services this one is
-# NOT version-prefixed: the agent's public paths are fixed by contract — the MCP
-# endpoint is mounted at /mcp and the portfolio frontend calls /mcp-tools/invoke —
-# so they are mounted at the root rather than under /api/v1.
-api_router = APIRouter()
-api_router.include_router(mcp_tools_router)
+# Aggregator for the public HTTP surface, versioned at /api/v1 like every sibling
+# service. The MCP endpoint is NOT part of it: /mcp is an external contract that
+# Claude Desktop and MCP Inspector depend on, and it is mounted in `main` as its
+# own ASGI app.
+api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(invoke_router)

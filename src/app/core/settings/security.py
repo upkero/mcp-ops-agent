@@ -9,13 +9,13 @@ class SecuritySettings(BaseSettings):
 
     When ``api_key`` is unset the HTTP routes are open (convenient for a local
     demo / connecting an MCP client). Set it in any real deployment to require an
-    ``X-API-Key`` header on ``POST /mcp-tools/invoke``.
+    ``X-API-Key`` header on ``POST /api/v1/invoke``.
     """
 
     api_key: str | None = Field(
         default=None,
         min_length=16,
-        description="If set, required as the X-API-Key header on /mcp-tools/invoke.",
+        description="If set, required as the X-API-Key header on /api/v1/invoke.",
     )
 
     model_config = SettingsConfigDict(

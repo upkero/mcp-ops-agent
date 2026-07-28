@@ -1,7 +1,7 @@
 """The authentic Definition-of-Done proof, automated.
 
 Boots the whole app on a real loopback port, then POSTs a compound request to
-/mcp-tools/invoke. The orchestrator's real McpToolGateway self-connects to the
+/api/v1/invoke. The orchestrator's real McpToolGateway self-connects to the
 server's own mounted /mcp over genuine Streamable HTTP — so this exercises the
 "no bypass" path end to end. ops-core stays mocked, so it is one live server in
 process (CI-friendly).
@@ -116,7 +116,7 @@ async def test_compound_request_streams_two_tool_calls_and_a_final_answer() -> N
         httpx.AsyncClient(base_url=base_url, timeout=30.0) as client,
     ):
         response = await client.post(
-            "/mcp-tools/invoke",
+            "/api/v1/invoke",
             json={"message": "check the 18:00 table tomorrow and find Anna Petrova"},
         )
 

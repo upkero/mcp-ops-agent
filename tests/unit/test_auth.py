@@ -1,6 +1,6 @@
 import pytest
 
-from src.app.api.v1.dependencies import require_api_key
+from src.app.api.v1.dependencies.security import require_api_key
 from src.app.core.settings.security import SecuritySettings
 from src.app.exceptions.auth import UnauthorizedError
 

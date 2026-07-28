@@ -4,15 +4,19 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from src.app.api.v1.dependencies import OrchestratorDep, require_api_key
+from src.app.api.v1.dependencies import OrchestratorDep
+from src.app.api.v1.dependencies.security import require_api_key
 from src.app.contracts.agent.agent_event import AgentEvent
 from src.app.core.sse import format_sse
 from src.app.exceptions.base import BaseAppException
-from src.app.schemas.mcp_tools import InvokeRequest
+from src.app.schemas.invoke import InvokeRequest
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/mcp-tools", tags=["mcp-tools"])
+# No feature noun in the path: the host and port already say which service this
+# is, and what gets invoked is the agent — which decides for itself how many
+# tools to call — not one named MCP tool.
+router = APIRouter(tags=["agent"])
 
 
 @router.post("/invoke", dependencies=[Depends(require_api_key)])
