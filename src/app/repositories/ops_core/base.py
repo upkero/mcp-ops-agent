@@ -2,27 +2,13 @@ from collections.abc import Mapping
 
 import httpx
 
-from src.app.core.retry import retry_async
+from src.app.core.resilience import retry_async
 from src.app.exceptions.ops_core import OpsCoreNotFoundError, OpsCoreUnavailableError
 
 # Transient failures worth retrying: network/timeout errors + upstream 5xx.
 _RETRYABLE: tuple[type[Exception], ...] = (httpx.TransportError, httpx.HTTPStatusError)
 # Retryable status codes beyond 5xx: rate limiting and temporary unavailability.
 _RETRYABLE_STATUS = frozenset({429, 503})
-
-
-def _retry_after_seconds(exc: Exception) -> float | None:
-    """Honour a server ``Retry-After`` header (seconds form) when present."""
-    response = getattr(exc, "response", None)
-    if response is None:
-        return None
-    raw = response.headers.get("Retry-After")
-    if raw is None:
-        return None
-    try:
-        return max(0.0, float(raw))
-    except ValueError:
-        return None  # HTTP-date form is rare here; fall back to exponential backoff.
 
 
 async def ops_core_get(
@@ -35,12 +21,15 @@ async def ops_core_get(
 ) -> httpx.Response | None:
     """Shared GET for every ops-core adapter (DRY): retry + uniform error mapping.
 
-    Retries transport errors, 5xx, and rate-limit/unavailable (429/503) — honouring
-    ``Retry-After`` on the latter. A surviving 404 becomes None (when ``allow_404``)
+    Retries transport errors, 5xx, and rate-limit/unavailable (429/503) — the shared
+    ``core/resilience`` policy honours ``Retry-After``. A surviving 404 becomes None (when ``allow_404``)
     or OpsCoreNotFoundError; any other error response becomes OpsCoreUnavailableError,
     so no adapter re-implements this policy.
     """
 
+    # The decorator is applied here rather than at module level because `attempts`
+    # is per-adapter configuration, not a constant of this module.
+    @retry_async(attempts=attempts, retry_on=_RETRYABLE)
     async def _call() -> httpx.Response:
         response = await client.get(path, params=params)
         # Raise (retryable) for 5xx and 429/503; other 4xx are client problems where
@@ -50,13 +39,7 @@ async def ops_core_get(
         return response
 
     try:
-        response = await retry_async(
-            _call,
-            attempts=attempts,
-            base_delay=0.2,
-            retry_on=_RETRYABLE,
-            delay_for=_retry_after_seconds,
-        )
+        response = await _call()
     except httpx.HTTPError as exc:
         raise OpsCoreUnavailableError("Failed to reach ops-core-api.") from exc
 
