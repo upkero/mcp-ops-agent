@@ -40,7 +40,6 @@ class OpsCoreAvailabilityGateway(AvailabilityGateway):
             attempts=self._attempts,
             params={"date": slot_date.isoformat(), "resource_type": resource_type, "limit": 200},
         )
-        assert response is not None  # allow_404 is False → 404 raises, never returns None
         slots = [self._to_slot(item) for item in response.json().get("items", [])]
         logger.info(
             "ops_core.booking_slots",

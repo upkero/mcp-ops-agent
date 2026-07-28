@@ -17,18 +17,54 @@ async def ops_core_get(
     *,
     attempts: int,
     params: Mapping[str, str | int] | None = None,
-    allow_404: bool = False,
-) -> httpx.Response | None:
-    """Shared GET for every ops-core adapter (DRY): retry + uniform error mapping.
+) -> httpx.Response:
+    """Shared GET for every ops-core gateway (DRY): retry + uniform error mapping.
 
-    Retries transport errors, 5xx, and rate-limit/unavailable (429/503) — the shared
-    ``core/resilience`` policy honours ``Retry-After``. A surviving 404 becomes None (when ``allow_404``)
-    or OpsCoreNotFoundError; any other error response becomes OpsCoreUnavailableError,
-    so no adapter re-implements this policy.
+    A 404 means the caller asked for something that does not exist and is a typed
+    OpsCoreNotFoundError. Use ``ops_core_get_optional`` where absence is an
+    ordinary answer rather than a failure.
+    """
+    response = await _fetch(client, path, attempts=attempts, params=params)
+    if response.status_code == 404:
+        raise OpsCoreNotFoundError()
+    return response
+
+
+async def ops_core_get_optional(
+    client: httpx.AsyncClient,
+    path: str,
+    *,
+    attempts: int,
+    params: Mapping[str, str | int] | None = None,
+) -> httpx.Response | None:
+    """Same as ``ops_core_get``, but a 404 is None rather than an error.
+
+    Two functions instead of one ``allow_404`` flag: a boolean argument that
+    changes the return type to ``Response | None`` makes every caller that never
+    passes it prove to mypy that None cannot happen — which they did, with an
+    ``assert`` each. Splitting the flag away deletes all three at once.
+    """
+    response = await _fetch(client, path, attempts=attempts, params=params)
+    return None if response.status_code == 404 else response
+
+
+async def _fetch(
+    client: httpx.AsyncClient,
+    path: str,
+    *,
+    attempts: int,
+    params: Mapping[str, str | int] | None,
+) -> httpx.Response:
+    """Retry policy and error mapping, minus the 404 decision.
+
+    Retries transport errors, 5xx, and rate-limit/unavailable (429/503) — the
+    shared ``core/resilience`` policy honours ``Retry-After``. Any error response
+    other than 404 becomes OpsCoreUnavailableError, so no gateway re-implements
+    this policy.
     """
 
     # The decorator is applied here rather than at module level because `attempts`
-    # is per-adapter configuration, not a constant of this module.
+    # is per-gateway configuration, not a constant of this module.
     @retry_async(attempts=attempts, retry_on=_RETRYABLE)
     async def _call() -> httpx.Response:
         response = await client.get(path, params=params)
@@ -43,11 +79,7 @@ async def ops_core_get(
     except httpx.HTTPError as exc:
         raise OpsCoreUnavailableError("Failed to reach ops-core-api.") from exc
 
-    if response.status_code == 404:
-        if allow_404:
-            return None
-        raise OpsCoreNotFoundError()
-    if response.is_error:
+    if response.is_error and response.status_code != 404:
         # Non-retryable upstream response (e.g. 401 bad key, 422) → typed 502.
         raise OpsCoreUnavailableError(f"ops-core-api returned {response.status_code}.")
     return response

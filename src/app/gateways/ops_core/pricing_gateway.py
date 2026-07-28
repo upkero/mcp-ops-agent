@@ -28,7 +28,6 @@ class OpsCorePricingGateway(PricingGateway):
             attempts=self._attempts,
             params={"service": service, "quantity": quantity},
         )
-        assert response is not None  # unknown service → 404 already raised OpsCoreNotFoundError
         return self._to_quote(response.json())
 
     @staticmethod

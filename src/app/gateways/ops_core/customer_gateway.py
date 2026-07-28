@@ -4,7 +4,7 @@ from typing import Any
 import httpx
 
 from src.app.contracts.ops_core.customer import Customer
-from src.app.gateways.ops_core.base import ops_core_get
+from src.app.gateways.ops_core.base import ops_core_get, ops_core_get_optional
 from src.app.interfaces.ops_core.customers import CustomerGateway
 
 
@@ -22,11 +22,12 @@ class OpsCoreCustomerGateway(CustomerGateway):
         self._attempts = max_attempts
 
     async def get_by_id(self, customer_id: str) -> Customer | None:
-        response = await ops_core_get(
+        # Optional: "no such customer" is an ordinary answer to a lookup, not a
+        # failure, so a 404 comes back as None rather than as an exception.
+        response = await ops_core_get_optional(
             self._client,
             f"{self._BASE}/{customer_id}",
             attempts=self._attempts,
-            allow_404=True,
         )
         if response is None:
             return None
@@ -39,7 +40,6 @@ class OpsCoreCustomerGateway(CustomerGateway):
             attempts=self._attempts,
             params={"search": name, "limit": 50},
         )
-        assert response is not None  # allow_404 is False → 404 raises, never returns None
         return [self._to_customer(item) for item in response.json().get("items", [])]
 
     @staticmethod
