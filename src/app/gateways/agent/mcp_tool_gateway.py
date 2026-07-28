@@ -65,6 +65,15 @@ class McpToolGateway(ToolGateway):
 
     @asynccontextmanager
     async def open_session(self) -> AsyncIterator[ToolSession]:
+        # NOTE: the X-Request-ID chain deliberately ends here. Outbound calls to
+        # ops-core-api carry it (an httpx event hook in gateways/ops_core/client),
+        # but this hop is the MCP SDK's own transport: streamable_http_client takes
+        # no headers, only a whole httpx.AsyncClient, and supplying one means
+        # re-creating the SDK's tuned defaults from a private helper and owning its
+        # lifecycle — real coupling to buy a header on a loopback call that never
+        # leaves the process. The tool call is already logged on both sides of it
+        # under the incoming id, so the trace has no gap that matters.
+        #
         # Only the connect/initialise phase is wrapped — errors from the yielded
         # body (the orchestrator's own logic) must propagate unchanged.
         async with (
