@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.app.api.v1.exception_handlers import register_exception_handlers
+from src.app.api.v1.middleware.rate_limit import register_rate_limiting
 from src.app.api.v1.middleware.request_id import register_request_id_middleware
 from src.app.api.v1.router import api_router
 from src.app.api.v1.routers.health import router as health_router
@@ -44,6 +45,15 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     # ASGI transport that does not run the lifespan (e.g. httpx.ASGITransport tests).
     app.state.container = container
 
+    # Middleware is registered inside-out: Starlette prepends each one, so the
+    # LAST registered runs FIRST. The order below produces the runtime chain
+    #     CORS -> request_id -> rate_limit -> routes
+    # CORS has to be outermost because the rate limiter short-circuits with a
+    # 429, and that response must travel back out through CORS or the browser
+    # gets it without CORS headers — an opaque "Failed to fetch" instead of a
+    # readable status. It also means an OPTIONS preflight never spends quota.
+    register_rate_limiting(app)
+    register_request_id_middleware(app)
     settings = get_app_settings()
     app.add_middleware(
         CORSMiddleware,
@@ -54,7 +64,6 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    register_request_id_middleware(app)
     register_exception_handlers(app)
 
     app.include_router(health_router)
