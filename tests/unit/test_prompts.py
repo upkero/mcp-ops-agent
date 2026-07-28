@@ -1,0 +1,29 @@
+import pytest
+
+from src.app.prompts import Prompt, get_prompt
+
+
+def test_the_agent_system_prompt_is_loaded_from_disk() -> None:
+    prompt = get_prompt("ops_agent.system")
+    assert prompt.name == "ops_agent.system"
+    assert "never invent" in prompt.text
+
+
+def test_the_prompt_id_changes_with_the_wording() -> None:
+    """The whole point of the digest: a reworded prompt is a different id."""
+    assert Prompt("p", "one").id != Prompt("p", "two").id
+
+
+def test_an_unknown_prompt_names_what_is_available() -> None:
+    with pytest.raises(KeyError, match="ops_agent.system"):
+        get_prompt("no-such-prompt")
+
+
+def test_render_refuses_to_guess_at_a_missing_placeholder() -> None:
+    prompt = Prompt("p", "Reply in {reply_language} about {topic}.")
+    assert prompt.placeholders == {"reply_language", "topic"}
+
+    with pytest.raises(KeyError, match="topic"):
+        prompt.render(reply_language="English")
+
+    assert prompt.render(reply_language="English", topic="slots") == "Reply in English about slots."

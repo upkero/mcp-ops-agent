@@ -9,9 +9,11 @@ from src.app.contracts.llm.tool_call import ToolCall
 from src.app.core.settings.agent import AgentSettings
 from src.app.interfaces.agent.tool_gateway import ToolGateway, ToolSession
 from src.app.interfaces.llm.llm_client import LLMClient
-from src.app.llm.skills import OPS_AGENT_SYSTEM_PROMPT
+from src.app.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
+
+_PROMPT = get_prompt("ops_agent.system")
 
 
 class OrchestratorService:
@@ -42,7 +44,7 @@ class OrchestratorService:
         async with self._gateway.open_session() as session:
             tools = [self._to_openai_tool(tool) for tool in await session.list_tools()]
             messages: list[LLMMessage] = [
-                LLMMessage(role="system", content=OPS_AGENT_SYSTEM_PROMPT),
+                LLMMessage(role="system", content=_PROMPT.render()),
                 LLMMessage(role="user", content=user_message),
             ]
 
@@ -50,7 +52,9 @@ class OrchestratorService:
                 response = await self._llm.complete(messages, tools=tools)
 
                 if not response.tool_calls:
-                    logger.info("agent.final", extra={"steps": step + 1})
+                    # The prompt id travels with the answer: when a run looks wrong six
+                    # weeks from now, this says whether the wording had already changed.
+                    logger.info("agent.final", extra={"steps": step + 1, "prompt_id": _PROMPT.id})
                     yield AgentEvent(type="final", data={"content": response.content})
                     return
 
