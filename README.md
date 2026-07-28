@@ -12,12 +12,11 @@ and every consumer goes through the protocol; nothing calls the business logic b
 its back.
 
 The service owns no database. All data comes from a separate internal API
-([`ops-core-api`](../ops-core-api)) over HTTP; this repo is a pure MCP + orchestration
-layer.
+([`ops-core-api`](https://github.com/upkero/ops-core-api)) over HTTP; this repo is a pure
+MCP + orchestration layer.
 
-> A companion project. The layered architecture it follows is shared across the
-> portfolio and documented in [`../architecture.md`](../architecture.md); the
-> MCP-specific additions are in [`docs/architecture.md`](docs/architecture.md).
+> A companion project. The MCP-specific architecture notes are in
+> [`docs/architecture.md`](docs/architecture.md).
 
 ## What it does
 
@@ -36,20 +35,20 @@ interface:
 ```mermaid
 flowchart LR
   CD["Claude Desktop /<br/>MCP Inspector"] -- "MCP over<br/>Streamable HTTP" --> MCP
-  BR["Browser<br/>(portfolio UI)"] -- "SSE" --> API["POST /mcp-tools/invoke"]
+  BR["Browser<br/>(portfolio UI)"] -- "SSE" --> API["POST /api/v1/invoke"]
   API --> ORC["Orchestrator<br/>(LLM + MCP client)"]
   ORC -- "MCP over<br/>Streamable HTTP (self-loopback)" --> MCP["FastMCP server<br/>/mcp"]
   MCP --> TOOLS["mcp/v1/tools"]
   TOOLS --> SVC["services"]
-  SVC --> REPO["ops-core adapters"]
-  REPO -- "X-API-Key" --> CORE["ops-core-api"]
+  SVC --> GW["ops-core gateways"]
+  GW -- "X-API-Key" --> CORE["ops-core-api"]
 ```
 
 1. **External MCP client** (Claude Desktop, MCP Inspector, …) connects straight to
    `/mcp` over Streamable HTTP and drives the tools by hand.
 2. **Internal orchestrator** is itself an MCP *client* to the same `/mcp`: an LLM loop
    that lists the tools, calls them over the protocol, and streams each step.
-3. **`POST /mcp-tools/invoke`** is a thin HTTP route over the orchestrator. It streams
+3. **`POST /api/v1/invoke`** is a thin HTTP route over the orchestrator. It streams
    the agent's steps to the browser as **Server-Sent Events** — you watch the agent
    decide, call a tool, read the result, and answer — without ever putting the LLM key
    or an MCP client in the browser.
@@ -65,18 +64,20 @@ mirrors `api/v1/`:
 
 ```
 mcp/v1/tools  ─┐                 api/v1 (HTTP: SSE route, health)
-               ├─► services (business logic) ─► interfaces (ABC) ◄─ repositories / llm
+               ├─► services (business logic) ─► interfaces (ABC) ◄─ gateways / llm
 orchestrator ──┘                                     ▲
                           contracts (DTOs) ──────────┘   core · exceptions · bootstrap
 ```
 
+`gateways/` rather than `repositories/`: this service owns no store, so every adapter is
+somebody else's service over the network.
+
 **Design patterns (named and commented in the code):**
 
-- **Factory** — `llm/factory.py`, `repositories/ops_core/client.py` (the only places the
+- **Factory** — `llm/factory.py`, `gateways/ops_core/client.py` (the only places the
   SDK / HTTP clients are built).
-- **Repository** — `interfaces/ops_core/*` abstract data access.
-- **Adapter** — the httpx `repositories/ops_core/*` adapters and
-  `repositories/agent/mcp_tool_gateway.py` (an MCP client behind a plain interface).
+- **Adapter** — the httpx `gateways/ops_core/*` adapters and
+  `gateways/agent/mcp_tool_gateway.py` (an MCP client behind a plain interface).
 - **Strategy** — `NotificationChannel` (simulated now, real email/SMS later, no service
   change).
 - **Template Method** — the orchestrator's fixed `run()` loop skeleton.
@@ -85,30 +86,36 @@ orchestrator ──┘                                     ▲
 
 ## Run locally
 
-Prerequisites: Docker, and a running seeded [`ops-core-api`](../ops-core-api); plus an
-OpenAI API key (or any OpenAI-compatible, tool-calling endpoint).
+Prerequisites: Docker, and a running
+[`ops-core-api`](https://github.com/upkero/ops-core-api) with its demo data loaded; plus
+an OpenAI API key (or any OpenAI-compatible, tool-calling endpoint).
 
 ```bash
 cp .env.example .env
 # edit .env: set LLM_API_KEY, and OPS_CORE_API_KEY / OPS_CORE_BASE_URL to match ops-core-api
 ```
 
-**Docker** — this agent has no database of its own, so compose runs just the service. It
-must reach `ops-core-api`; put both on one docker network:
+**Docker** — this agent has no database of its own, so compose runs just the service, and
+reaches `ops-core-api` through `host.docker.internal`. There is no shared docker network,
+so both compose files stay independent:
 
 ```bash
-docker network create ops-net          # once; start ops-core-api attached to it too
-docker compose up --build              # agent on http://localhost:8000
+docker compose up --build     # agent on http://127.0.0.1:8003
 ```
 
-(With `ops-core-api` on the same network, set `OPS_CORE_BASE_URL=http://api:8000`. If it
-runs on the host instead, use `http://host.docker.internal:8000`.)
+The port is published on **loopback only** (`127.0.0.1:8003:8000`) on purpose — see
+[Exposing this service](#exposing-this-service). Inside the container it still listens on
+8000, which is why `AGENT_MCP_SELF_URL` stays `http://localhost:8000/mcp`. With
+`ops-core-api` running on the host, set
+`OPS_CORE_BASE_URL=http://host.docker.internal:8000`.
 
-**Without Docker:**
+**Without Docker** — pick 8003 so `ops-core-api` keeps 8000, and move the self-loopback to
+the same port or the orchestrator will call nothing:
 
 ```bash
 uv sync
-uv run uvicorn src.main:app --reload    # http://localhost:8000
+AGENT_MCP_SELF_URL=http://localhost:8003/mcp \
+  uv run uvicorn src.main:app --reload --port 8003
 ```
 
 ## Try it
@@ -116,7 +123,7 @@ uv run uvicorn src.main:app --reload    # http://localhost:8000
 **Composite request over SSE** (`-N` disables curl buffering so you see events arrive):
 
 ```bash
-curl -N -X POST http://localhost:8000/mcp-tools/invoke \
+curl -N -X POST http://localhost:8003/api/v1/invoke \
   -H "Content-Type: application/json" \
   -d '{"message": "Is the 18:00 table free tomorrow, and can you look up Anna Petrova?"}'
 ```
@@ -138,34 +145,38 @@ event: final
 data: {"content":"The 18:00 table is free tomorrow (seats 4), and I found Anna Petrova (active)."}
 ```
 
-**Health** — a single readiness check that reports both upstreams (200 when both are
-reachable, 503 otherwise):
+**Health** — liveness is the process alone; readiness reports both upstreams:
 
 ```bash
-curl http://localhost:8000/health      # {"status":"ok","llm":true,"ops_core":true}
+curl http://localhost:8003/health/live     # {"status":"ok"}
+curl http://localhost:8003/health/ready    # {"status":"ok","llm":true,"ops_core":true}; 503 if either is down
 ```
 
+Docker's `HEALTHCHECK` polls `/health/live`, so the container is not marked unhealthy
+because the LLM provider is having a bad morning.
+
 **Optional auth** — leave it open for the demo, or set `SECURITY_API_KEY` (≥16 chars) to
-require `X-API-Key` on `POST /mcp-tools/invoke`:
+require `X-API-Key` on `POST /api/v1/invoke`:
 
 ```bash
-curl -N -X POST http://localhost:8000/mcp-tools/invoke \
+curl -N -X POST http://localhost:8003/api/v1/invoke \
   -H "X-API-Key: $SECURITY_API_KEY" -H "Content-Type: application/json" \
   -d '{"message":"..."}'
 ```
 
 ## Connect an external MCP client to `/mcp`
 
-The server speaks MCP over **Streamable HTTP** at `http://localhost:8000/mcp`.
+Run the service locally and point your MCP client at **your own localhost** — that is the
+intended shape, not a hosted URL.
 
 **MCP Inspector** (quickest way to see tools and call them live):
 
 ```bash
 npx @modelcontextprotocol/inspector
-# In the UI: Transport = "Streamable HTTP", URL = http://localhost:8000/mcp → Connect
+# In the UI: Transport = "Streamable HTTP", URL = http://localhost:8003/mcp → Connect
 ```
 
-**Claude Desktop** — bridge stdio to the HTTP endpoint via `mcp-remote` in
+**Claude Desktop** — bridge stdio to your local endpoint via `mcp-remote` in
 `claude_desktop_config.json`:
 
 ```json
@@ -173,7 +184,7 @@ npx @modelcontextprotocol/inspector
   "mcpServers": {
     "ops-agent": {
       "command": "npx",
-      "args": ["mcp-remote", "http://localhost:8000/mcp"]
+      "args": ["mcp-remote", "http://localhost:8003/mcp"]
     }
   }
 }
@@ -182,12 +193,27 @@ npx @modelcontextprotocol/inspector
 Restart Claude Desktop; the four tools appear and execute against the very same server
 the internal orchestrator uses.
 
+## Exposing this service
+
+`/mcp` is unauthenticated: MCP clients rely on the protocol's own auth story, and the
+self-loopback needs no key. That is fine on localhost and **not** fine on the open
+internet, so this is a deployment decision rather than a code one:
+
+- **`/mcp` is closed at the perimeter.** Only `POST /api/v1/invoke`, with its own
+  `SECURITY_API_KEY`, faces outward.
+- **Set `SECURITY_API_KEY` before exposing anything publicly.** The per-IP rate limit
+  (`INVOKE_RATE_LIMIT_PER_MINUTE`, 20 by default) protects against abuse, not against
+  cost: 20 requests a minute from one address × up to `AGENT_MAX_STEPS` LLM calls each is
+  real money.
+- Compose publishes on `127.0.0.1:8003` rather than `0.0.0.0:8003` so none of the above
+  can happen by accident on a machine with a public IP.
+
 ## Tests
 
 ```bash
 uv run ruff check .
 uv run mypy src
-uv run pytest --cov=src/app/services --cov-report=term-missing
+uv run pytest --cov=src/app/services --cov-report=term-missing --cov-fail-under=60
 ```
 
 The suite includes unit tests for every service (mocked interfaces), Pydantic
@@ -205,10 +231,23 @@ All via environment (see [`.env.example`](.env.example)); grouped by prefix:
 | Prefix | Concern |
 |--------|---------|
 | `LOG_` | Log level and format (json/text). |
-| `LLM_` | Provider, model, key, base URL — OpenAI-compatible; the demo defaults to OpenAI. |
-| `OPS_CORE_` | `ops-core-api` base URL, `X-API-Key`, timeout, retries. |
+| `LLM_` | Provider, model, key, base URL — OpenAI-compatible. |
+| `OPS_CORE_` | `ops-core-api` base URL, `X-API-Key`, timeout, total attempts. |
 | `AGENT_` | `MAX_STEPS`, and `MCP_SELF_URL` (the orchestrator's loopback to `/mcp`). |
-| `SECURITY_` | Optional `API_KEY` gating `POST /mcp-tools/invoke` (unset = open). |
+| `SECURITY_` | Optional `API_KEY` gating `POST /api/v1/invoke` (unset = open). |
+| `CORS_` | `ALLOWED_ORIGINS`, comma-separated. |
+
+Three things worth knowing before the first run:
+
+- **The default provider is OpenAI, deliberately** — unlike the sibling services, which
+  default to a local Ollama model. An agentic tool-calling loop is unreliable on a small
+  local model, and reliable tool calling is precisely what this service exists to
+  demonstrate. Point `LLM_BASE_URL` at Ollama if you would rather trade that for free.
+- **`CORS_ALLOWED_ORIGINS` is empty by default**, which blocks every browser client. A
+  frontend needs its origin listed there before it can call in.
+- **The `OPS_CORE_API_KEY` placeholder `change-me-min-16-chars` is shared by all five
+  services in the portfolio** and is rotated in all five at once, so a plain
+  `cp .env.example .env` still gives a working demo.
 
 ---
 
@@ -221,12 +260,10 @@ All via environment (see [`.env.example`](.env.example)); grouped by prefix:
 раз**, и каждый потребитель идёт через протокол; ничто не вызывает бизнес-логику в обход.
 
 У сервиса нет собственной базы данных. Все данные приходят из отдельного внутреннего API
-([`ops-core-api`](../ops-core-api)) по HTTP; этот репозиторий — чистый слой MCP и
-оркестрации.
+([`ops-core-api`](https://github.com/upkero/ops-core-api)) по HTTP; этот репозиторий —
+чистый слой MCP и оркестрации.
 
-> Слоистая архитектура общая для портфолио и описана в
-> [`../architecture.md`](../architecture.md); MCP-специфика — в
-> [`docs/architecture.md`](docs/architecture.md).
+> MCP-специфика архитектуры — в [`docs/architecture.md`](docs/architecture.md).
 
 ## Что делает
 
@@ -246,7 +283,7 @@ All via environment (see [`.env.example`](.env.example)); grouped by prefix:
    по Streamable HTTP и вызывает инструменты вручную.
 2. **Внутренний оркестратор** сам является MCP-*клиентом* к тому же `/mcp`: LLM-цикл,
    который получает список инструментов, вызывает их через протокол и стримит каждый шаг.
-3. **`POST /mcp-tools/invoke`** — тонкий HTTP-роутер поверх оркестратора. Стримит шаги
+3. **`POST /api/v1/invoke`** — тонкий HTTP-роутер поверх оркестратора. Стримит шаги
    агента в браузер как **Server-Sent Events**: видно, как агент решает, вызывает
    инструмент, читает результат и отвечает — без переноса LLM-ключа или MCP-клиента в
    браузер.
@@ -258,30 +295,38 @@ HTTP, не существует пути, которым инструмент в
 
 Слоистая, со строгим правилом однонаправленных зависимостей (внешние слои зависят от
 внутренних, никогда наоборот) — общая архитектура портфолио плюс версионированный слой
-`mcp/v1/`, зеркалящий `api/v1/`.
+`mcp/v1/`, зеркалящий `api/v1/`. Адаптеры лежат в `gateways/`, а не в `repositories/`:
+своего хранилища у сервиса нет, всё внешнее и по сети.
 
 **Паттерны (названы и прокомментированы в коде):** Factory (`llm/factory.py`,
-`repositories/ops_core/client.py`), Repository (`interfaces/ops_core/*`), Adapter
-(httpx-адаптеры и `mcp_tool_gateway.py`), Strategy (`NotificationChannel`), Template
-Method (цикл `run()` оркестратора), Dependency Inversion — везде.
+`gateways/ops_core/client.py`), Adapter (httpx-адаптеры и `mcp_tool_gateway.py`),
+Strategy (`NotificationChannel`), Template Method (цикл `run()` оркестратора),
+Dependency Inversion — везде.
 
 ## Запуск локально
 
-Нужны: Docker и запущенный засиженный [`ops-core-api`](../ops-core-api); ключ OpenAI (или
-любой OpenAI-совместимый endpoint с поддержкой tool-calling).
+Нужны: Docker и запущенный [`ops-core-api`](https://github.com/upkero/ops-core-api)
+с загруженными демо-данными; ключ OpenAI (или любой OpenAI-совместимый endpoint
+с поддержкой tool-calling).
 
 ```bash
 cp .env.example .env
 # в .env задайте LLM_API_KEY, а также OPS_CORE_API_KEY / OPS_CORE_BASE_URL под ops-core-api
-docker network create ops-net     # один раз; ops-core-api подключите к этой же сети
-docker compose up --build         # агент на http://localhost:8000
+docker compose up --build         # агент на http://127.0.0.1:8003
 ```
 
-Без Docker:
+Порт публикуется только на loopback (`127.0.0.1:8003:8000`) — см. «Публикация наружу».
+Внутри контейнера сервис слушает 8000, поэтому `AGENT_MCP_SELF_URL` остаётся
+`http://localhost:8000/mcp`. Если `ops-core-api` поднят на хосте, задайте
+`OPS_CORE_BASE_URL=http://host.docker.internal:8000`.
+
+Без Docker — берите 8003, чтобы 8000 остался за `ops-core-api`, и переведите
+self-loopback на тот же порт:
 
 ```bash
 uv sync
-uv run uvicorn src.main:app --reload
+AGENT_MCP_SELF_URL=http://localhost:8003/mcp \
+  uv run uvicorn src.main:app --reload --port 8003
 ```
 
 ## Примеры
@@ -289,7 +334,7 @@ uv run uvicorn src.main:app --reload
 Составной запрос через SSE:
 
 ```bash
-curl -N -X POST http://localhost:8000/mcp-tools/invoke \
+curl -N -X POST http://localhost:8003/api/v1/invoke \
   -H "Content-Type: application/json" \
   -d '{"message": "Свободен ли завтра столик на 18:00 и найди Анну Петрову?"}'
 ```
@@ -297,19 +342,37 @@ curl -N -X POST http://localhost:8000/mcp-tools/invoke \
 Ответ — поток событий `tool_call` → `tool_result` (по одному на каждый инструмент) и
 финальное `final` со связным ответом (см. английский пример выше).
 
+Health: `/health/live` — только процесс (это и опрашивает Docker), `/health/ready` —
+оба upstream'а, 503 если хоть один недоступен.
+
 ## Подключение внешнего MCP-клиента к `/mcp`
 
-Сервер говорит по MCP через **Streamable HTTP** на `http://localhost:8000/mcp`. Быстрее
-всего — MCP Inspector (`npx @modelcontextprotocol/inspector`, транспорт «Streamable
-HTTP», URL `http://localhost:8000/mcp`). Для Claude Desktop используйте мост `mcp-remote`
+Поднимите сервис локально и подключайте клиент к **своему localhost**. Быстрее всего —
+MCP Inspector (`npx @modelcontextprotocol/inspector`, транспорт «Streamable HTTP», URL
+`http://localhost:8003/mcp`). Для Claude Desktop используйте мост `mcp-remote`
 в `claude_desktop_config.json` (см. английскую версию).
+
+## Публикация наружу
+
+`/mcp` не защищён ключом: MCP-клиенты полагаются на собственную авторизацию протокола,
+а self-loopback ключа не требует. На localhost это нормально, в интернете — нет, и это
+вопрос деплоя, а не кода:
+
+- **`/mcp` закрывается на периметре.** Наружу смотрит только `POST /api/v1/invoke` со
+  своим `SECURITY_API_KEY`.
+- **Перед публикацией наружу задайте `SECURITY_API_KEY`.** Рейт-лимит
+  (`INVOKE_RATE_LIMIT_PER_MINUTE`, по умолчанию 20) защищает от абьюза, но не от расхода:
+  20 запросов в минуту с одного IP × до `AGENT_MAX_STEPS` вызовов LLM — это реальные
+  деньги.
+- Compose биндит порт на `127.0.0.1`, чтобы ничего из этого не случилось случайно на
+  машине с публичным IP.
 
 ## Тесты
 
 ```bash
 uv run ruff check .
 uv run mypy src
-uv run pytest --cov=src/app/services --cov-report=term-missing
+uv run pytest --cov=src/app/services --cov-report=term-missing --cov-fail-under=60
 ```
 
 Ключевой тест — герметичный self-loopback (`tests/integration/test_self_loopback.py`):
@@ -317,3 +380,12 @@ uv run pytest --cov=src/app/services --cov-report=term-missing
 последовательных события `tool_call` и финальный ответ, причём оркестратор реально
 дергает смонтированный `/mcp` по Streamable HTTP. Живые LLM и `ops-core-api` не нужны —
 оба замоканы.
+
+## Конфигурация
+
+Дефолтный провайдер — **OpenAI, и это осознанно**: соседние сервисы по умолчанию ходят в
+локальную Ollama, но агентский цикл с tool-calling на маленькой локальной модели работает
+ненадёжно, а именно надёжность вызова инструментов этот сервис и демонстрирует.
+`CORS_ALLOWED_ORIGINS` по умолчанию пуст — браузерному клиенту нужно прописать свой
+origin. Плейсхолдер `change-me-min-16-chars` в `OPS_CORE_API_KEY` общий для всех пяти
+сервисов портфолио и меняется во всех пяти сразу.
