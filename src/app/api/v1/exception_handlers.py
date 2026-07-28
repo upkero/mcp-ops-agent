@@ -25,7 +25,20 @@ def _error_response(
     )
 
 
+def error_response_from_exception(exc: BaseAppException, headers: Mapping[str, str] | None = None) -> JSONResponse:
+    """Render an app exception as the uniform envelope.
+
+    Exposed for the rate-limit middleware: exception handlers live *inside* the
+    middleware stack, so a raise from a middleware escapes them and becomes a raw
+    500. The middleware returns this instead of raising.
+    """
+    return _error_response(exc.status_code, exc.detail, exc.error_code, headers)
+
+
 async def handle_app_exception(request: Request, exc: BaseAppException) -> JSONResponse:
+    # 5xx are our faults and are logged with a stacktrace; 4xx are the caller's
+    # and stay quiet. Either way the caller gets the same typed envelope, never
+    # a raw traceback.
     if exc.status_code >= 500:
         logger.error(
             "Application error on %s %s: %s",
@@ -33,14 +46,17 @@ async def handle_app_exception(request: Request, exc: BaseAppException) -> JSONR
             request.url.path,
             exc.detail,
             exc_info=exc,
+            extra=exc.extra,
         )
-    return _error_response(exc.status_code, exc.detail, exc.error_code)
+    return _error_response(exc.status_code, exc.detail, exc.error_code, exc.headers or None)
 
 
 async def handle_request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
     logger.warning("Request validation error on %s %s", request.method, request.url.path)
     errors = exc.errors()
     for err in errors:
+        # Pydantic sometimes tucks a raw exception in ctx; JSONResponse cannot
+        # serialise it, so stringify before it reaches the encoder.
         if (ctx := err.get("ctx")) and isinstance(ctx.get("error"), Exception):
             ctx["error"] = str(ctx["error"])
     return _error_response(422, errors, "request_validation_error")
@@ -56,8 +72,6 @@ async def handle_unexpected_exception(request: Request, exc: Exception) -> JSONR
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    # Starlette types handlers as accepting bare `Exception`; our handlers take the
-    # narrower concrete types they are registered for — a known typing mismatch.
     app.add_exception_handler(BaseAppException, handle_app_exception)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, handle_request_validation_error)  # type: ignore[arg-type]
     app.add_exception_handler(StarletteHTTPException, handle_http_exception)  # type: ignore[arg-type]
