@@ -43,6 +43,15 @@ class OrchestratorService:
         # One MCP session per run (reused across every turn below), then closed.
         async with self._gateway.open_session() as session:
             tools = [self._to_openai_tool(tool) for tool in await session.list_tools()]
+            # NOTE: the conversation is a local list that lives for one run and is
+            # dropped with it. There is no store, and the MCP server is stateless_http,
+            # so a session per run is all there is to keep. The ceiling: the agent has
+            # no memory between requests, so a follow-up like "and the day after?"
+            # arrives with no idea what was asked first. Deliberate at this scale — the
+            # demo is one compound request. The upgrade is the sibling sales-agent's
+            # shape: a ConversationRepository port, in-memory now and Postgres later,
+            # with this list loaded from it instead of built fresh. Nothing else here
+            # changes.
             messages: list[LLMMessage] = [
                 LLMMessage(role="system", content=_PROMPT.render()),
                 LLMMessage(role="user", content=user_message),
