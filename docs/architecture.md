@@ -1,7 +1,6 @@
 # Architecture — MCP Ops Agent
 
-This service follows the shared portfolio architecture in
-[`../../architecture.md`](../../architecture.md) — layered, with a strict inward
+This service follows the shared portfolio architecture — layered, with a strict inward
 dependency rule (outer layers depend on inner, never the reverse). This document covers
 only what is specific to the MCP agent.
 
@@ -34,7 +33,7 @@ self-contained; `streamable_http_path="/"` makes the mounted endpoint resolve to
 - **External clients** (Claude Desktop, MCP Inspector) connect to `/mcp` directly.
 - **The internal orchestrator** (`services/orchestrator.py`) depends on two interfaces —
   `LLMClient` and `ToolGateway`. Its concrete gateway
-  (`repositories/agent/mcp_tool_gateway.py`) is an **Adapter** over the official MCP
+  (`gateways/agent/mcp_tool_gateway.py`) is an **Adapter** over the official MCP
   client that connects to the server's *own* `/mcp` over Streamable HTTP
   (`AGENT_MCP_SELF_URL`). So even the internal agent reaches tools only through genuine
   MCP JSON-RPC — there is no in-process shortcut to the tools or services.
@@ -58,16 +57,21 @@ observable step:
      `tool_result`, append the result as a `tool` message; continue.
 3. Step limit reached → emit `error`.
 
-The `api/v1/routers/mcp_tools.py` SSE route only forwards the message and serialises each
+The `api/v1/routers/invoke.py` SSE route only forwards the message and serialises each
 yielded event as an SSE frame (`core/sse.py`). It knows nothing about the tools.
 
 ## No database
 
-Unlike the sibling services, this one has no `models/` or `db/`. Every piece of data is
-fetched from `ops-core-api` through the `interfaces/ops_core/*` repositories, whose httpx
-adapters share a single client built by `repositories/ops_core/client.py`. The
-`send_notification` tool has no upstream endpoint and is a deliberate simulation
-(`repositories/notifications/simulated_channel.py`, a `NotificationChannel` **Strategy**).
+Unlike the sibling services, this one has no `models/` or `db/`. That is also why its
+adapters live in `gateways/` rather than `repositories/`: the rule across the portfolio is
+`repositories/` for a store this service owns and `gateways/` for somebody else's service
+over the network, and everything here is the latter. Every piece of data is fetched from
+`ops-core-api` through the `interfaces/ops_core/*` ports — named `*Gateway` for the same
+reason — whose httpx adapters share a single client built by `gateways/ops_core/client.py`.
+The ports are still shaped like data access on purpose, so `services/` cannot tell an HTTP
+call apart from a database read. The `send_notification` tool has no upstream endpoint and
+is a deliberate simulation (`gateways/notifications/simulated_channel.py`, a
+`NotificationChannel` **Strategy**).
 
 ## Errors
 
@@ -80,8 +84,14 @@ not an HTTP error status.
 
 ## Operational surface
 
-- `GET /health` — a single readiness check that pings both upstreams (LLM +
-  ops-core-api via `OpsCoreHealthChecker`) and returns 503 when either is down.
-- `POST /mcp-tools/invoke` is gated by an optional `X-API-Key` (`SECURITY_API_KEY`): open
-  when unset (demo / MCP-client friendly), required when set. `/mcp` is left to the MCP
-  protocol's own auth story and stays open here, so the self-loopback needs no key.
+- `GET /health/live` — the process is up. Checks nothing else, so a container is never
+  killed because OpenAI is having a bad morning. This is what Docker's `HEALTHCHECK` polls.
+- `GET /health/ready` — pings both upstreams (LLM + ops-core-api via
+  `OpsCoreHealthChecker`) and returns 503 when either is down.
+- `POST /api/v1/invoke` is gated by an optional `X-API-Key` (`SECURITY_API_KEY`): open
+  when unset (demo friendly), required when set. It is also the one path behind a per-IP
+  rate limit (`api/v1/middleware/rate_limit.py`), because one call to it can drive up to
+  `AGENT_MAX_STEPS` LLM calls — the cap bounds spend, not just abuse.
+- `/mcp` is left to the MCP protocol's own auth story and stays open here, so the
+  self-loopback needs no key. On a real deployment that is a perimeter decision rather
+  than a code one: close `/mcp` at the edge and expose only `/api/v1/invoke`.
