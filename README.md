@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
 A **real [Model Context Protocol](https://modelcontextprotocol.io) server** (built on
-FastMCP from the official MCP Python SDK) for a wellness-clinic operations desk, plus a
+FastMCP from the official MCP Python SDK) for an operations desk, plus a
 self-consuming **agentic orchestrator** that reaches those tools the same way any
 external client does — over genuine MCP JSON-RPC. The tools are defined **exactly once**
 and every consumer goes through the protocol; nothing calls the business logic behind
@@ -215,7 +215,7 @@ All via environment (see [`.env.example`](.env.example)); grouped by prefix:
 # MCP Ops Agent (RU)
 
 Настоящий **MCP-сервер** ([Model Context Protocol](https://modelcontextprotocol.io),
-на FastMCP из официального MCP Python SDK) для операционного пульта wellness-клиники и
+на FastMCP из официального MCP Python SDK) для операционного пульта и
 **внутренний агент-оркестратор**, который обращается к тем же инструментам так же, как
 любой внешний клиент — через настоящий MCP JSON-RPC. Инструменты определены **ровно один
 раз**, и каждый потребитель идёт через протокол; ничто не вызывает бизнес-логику в обход.
