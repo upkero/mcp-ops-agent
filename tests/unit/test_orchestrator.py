@@ -3,7 +3,7 @@ from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.tool_call import ToolCall
 from src.app.core.settings.agent import AgentSettings
 from src.app.services.orchestrator import OrchestratorService
-from tests.doubles import FakeToolGateway, FakeToolSession, ScriptedLLMClient
+from tests.fakes import FakeToolGateway, FakeToolSession, ScriptedLLMClient
 
 _TOOLS = [
     ToolDefinition("check_calendar_availability", "check a slot", {"type": "object"}),

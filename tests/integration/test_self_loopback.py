@@ -26,7 +26,7 @@ from src.app.interfaces.ops_core.availability import AvailabilityRepository
 from src.app.interfaces.ops_core.customers import CustomerRepository
 from src.app.repositories.agent.mcp_tool_gateway import McpToolGateway
 from src.main import create_app
-from tests.doubles import ScriptedLLMClient
+from tests.fakes import ScriptedLLMClient
 
 
 def _free_port() -> int:
