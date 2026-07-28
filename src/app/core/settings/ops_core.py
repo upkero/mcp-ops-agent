@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,7 +15,9 @@ class OpsCoreSettings(BaseSettings):
         default="http://localhost:8000",
         description="Base URL of ops-core-api (WITHOUT the /api/v1 suffix).",
     )
-    api_key: str = Field(
+    # SecretStr keeps the key out of logs and repr; it is unwrapped exactly once,
+    # where the httpx client is built.
+    api_key: SecretStr = Field(
         ...,
         min_length=16,
         description="API key sent as the X-API-Key header to ops-core-api.",
@@ -25,10 +27,13 @@ class OpsCoreSettings(BaseSettings):
         gt=0,
         description="HTTP timeout for ops-core-api calls in seconds.",
     )
-    max_retries: int = Field(
-        default=2,
-        ge=0,
-        description="Retry attempts for transient ops-core-api failures.",
+    # Total tries including the first, not the number of repeats — the same
+    # meaning every service in the portfolio gives OPS_CORE_MAX_ATTEMPTS, so the
+    # value arrives ready to hand to the retry policy.
+    max_attempts: int = Field(
+        default=3,
+        ge=1,
+        description="Total attempts (including the first) for transient ops-core-api failures.",
     )
 
     model_config = SettingsConfigDict(

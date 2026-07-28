@@ -17,9 +17,9 @@ class OpsCorePricingRepository(PricingRepository):
 
     _PATH = "/api/v1/pricing"
 
-    def __init__(self, *, client: httpx.AsyncClient, max_retries: int) -> None:
+    def __init__(self, *, client: httpx.AsyncClient, max_attempts: int) -> None:
         self._client = client
-        self._attempts = max_retries + 1
+        self._attempts = max_attempts
 
     async def quote(self, service: str, quantity: int) -> PriceQuote:
         response = await ops_core_get(

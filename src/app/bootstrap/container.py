@@ -50,21 +50,21 @@ class ApplicationContainer:
     def availability_repository(self) -> AvailabilityRepository:
         return OpsCoreAvailabilityRepository(
             client=self._ops_core_client,
-            max_retries=get_ops_core_settings().max_retries,
+            max_attempts=get_ops_core_settings().max_attempts,
         )
 
     @cached_property
     def customer_repository(self) -> CustomerRepository:
         return OpsCoreCustomerRepository(
             client=self._ops_core_client,
-            max_retries=get_ops_core_settings().max_retries,
+            max_attempts=get_ops_core_settings().max_attempts,
         )
 
     @cached_property
     def pricing_repository(self) -> PricingRepository:
         return OpsCorePricingRepository(
             client=self._ops_core_client,
-            max_retries=get_ops_core_settings().max_retries,
+            max_attempts=get_ops_core_settings().max_attempts,
         )
 
     @cached_property

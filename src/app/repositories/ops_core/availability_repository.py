@@ -24,9 +24,9 @@ class OpsCoreAvailabilityRepository(AvailabilityRepository):
 
     _PATH = "/api/v1/booking-slots"
 
-    def __init__(self, *, client: httpx.AsyncClient, max_retries: int) -> None:
+    def __init__(self, *, client: httpx.AsyncClient, max_attempts: int) -> None:
         self._client = client
-        self._attempts = max_retries + 1
+        self._attempts = max_attempts
 
     async def list_slots(
         self,

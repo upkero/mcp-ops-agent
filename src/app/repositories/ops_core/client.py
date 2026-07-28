@@ -14,6 +14,6 @@ def create_ops_core_http_client(settings: OpsCoreSettings) -> httpx.AsyncClient:
     """
     return httpx.AsyncClient(
         base_url=settings.base_url.rstrip("/"),
-        headers={_API_KEY_HEADER: settings.api_key},
+        headers={_API_KEY_HEADER: settings.api_key.get_secret_value()},
         timeout=settings.timeout_seconds,
     )
