@@ -1,9 +1,11 @@
+from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any
 
 import httpx
 
 from src.app.contracts.ops_core.price_quote import PriceQuote
+from src.app.contracts.ops_core.priced_service import PricedService
 from src.app.gateways.ops_core.base import ops_core_get
 from src.app.interfaces.ops_core.pricing import PricingGateway
 
@@ -29,6 +31,18 @@ class OpsCorePricingGateway(PricingGateway):
             params={"service": service, "quantity": quantity},
         )
         return self._to_quote(response.json())
+
+    async def list_services(self) -> Sequence[PricedService]:
+        response = await ops_core_get(
+            self._client,
+            f"{self._PATH}/services",
+            attempts=self._attempts,
+            params={"limit": 100},
+        )
+        return [
+            PricedService(service_name=item["service_name"], unit_price=Decimal(str(item["unit_price"])))
+            for item in response.json()["items"]
+        ]
 
     @staticmethod
     def _to_quote(body: dict[str, Any]) -> PriceQuote:

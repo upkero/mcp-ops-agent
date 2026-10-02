@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 from src.app.contracts.ops_core.price_quote import PriceQuote
+from src.app.contracts.ops_core.priced_service import PricedService
 
 
 class PricingGateway(ABC):
@@ -12,3 +14,7 @@ class PricingGateway(ABC):
 
         Raises OpsCoreNotFoundError when the service name is unknown.
         """
+
+    @abstractmethod
+    async def list_services(self) -> Sequence[PricedService]:
+        """Return every service on the price list, with its unit price."""

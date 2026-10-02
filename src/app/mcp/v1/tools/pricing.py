@@ -11,8 +11,18 @@ def register(mcp: FastMCP, container: ApplicationContainer) -> None:
     """Register pricing tools on the MCP server."""
 
     @mcp.tool()
+    async def list_services() -> dict[str, object]:
+        """List every service on the price list with its unit price.
+
+        Names are in English. Call this first when the user names a service in
+        another language or loosely, then pass the exact name to calculate_quote.
+        """
+        services = await container.pricing_service.list_services()
+        return {"services": [{"name": item.service_name, "unit_price": str(item.unit_price)} for item in services]}
+
+    @mcp.tool()
     async def calculate_quote(
-        service: Annotated[str, Field(min_length=1, description="Exact service name to price.")],
+        service: Annotated[str, Field(min_length=1, description="Exact service name to price, as returned by list_services.")],
         quantity: Annotated[int, Field(ge=1, le=1000, description="Number of units/sessions to quote.")],
     ) -> dict[str, object]:
         """Calculate a price quote for a service and quantity (volume discounts apply).
@@ -25,7 +35,10 @@ def register(mcp: FastMCP, container: ApplicationContainer) -> None:
         except OpsCoreNotFoundError:
             # A business "not found" outcome — reported to the model, not raised,
             # so it can correct the service name and try again.
-            return {"found": False, "error": f"Unknown service '{service}'."}
+            return {
+                "found": False,
+                "error": f"Unknown service '{service}'. Call list_services for the exact names.",
+            }
 
         return {
             "found": True,

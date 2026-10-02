@@ -1,6 +1,8 @@
 import logging
+from collections.abc import Sequence
 
 from src.app.contracts.ops_core.price_quote import PriceQuote
+from src.app.contracts.ops_core.priced_service import PricedService
 from src.app.interfaces.ops_core.pricing import PricingGateway
 
 logger = logging.getLogger(__name__)
@@ -24,3 +26,6 @@ class PricingService:
             extra={"service": result.service_name, "quantity": result.quantity, "total": str(result.total)},
         )
         return result
+
+    async def list_services(self) -> Sequence[PricedService]:
+        return await self._pricing.list_services()

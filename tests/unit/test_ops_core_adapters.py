@@ -164,3 +164,13 @@ async def test_rate_limit_429_is_retried_honouring_retry_after() -> None:
 
     assert calls["n"] == 2
     assert slots == []
+
+
+async def test_pricing_lists_the_catalogue_as_decimals() -> None:
+    body = {"items": [{"service_name": "Deep Tissue Massage", "unit_price": "120.00"}], "total": 1}
+    async with httpx.AsyncClient(
+        base_url="http://core", transport=httpx.MockTransport(lambda request: httpx.Response(200, json=body))
+    ) as client:
+        services = await OpsCorePricingGateway(client=client, max_attempts=1).list_services()
+
+    assert [(item.service_name, item.unit_price) for item in services] == [("Deep Tissue Massage", Decimal("120.00"))]

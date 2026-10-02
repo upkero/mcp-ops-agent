@@ -20,6 +20,7 @@ _EXPECTED_TOOLS = {
     "check_calendar_availability",
     "lookup_customer",
     "calculate_quote",
+    "list_services",
     "send_notification",
 }
 
@@ -33,7 +34,7 @@ def _container_with_slots(slots: list[AvailabilitySlot]) -> ApplicationContainer
     return container
 
 
-async def test_server_lists_the_four_tools() -> None:
+async def test_server_lists_the_five_tools() -> None:
     server = build_mcp_server(ApplicationContainer())
 
     async with create_connected_server_and_client_session(server._mcp_server) as session:
