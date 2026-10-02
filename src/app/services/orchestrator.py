@@ -1,6 +1,7 @@
 import json
 import logging
 from collections.abc import AsyncIterator, Mapping
+from datetime import date
 
 from src.app.contracts.agent.agent_event import AgentEvent
 from src.app.contracts.agent.tool_catalog import ToolDefinition
@@ -53,7 +54,7 @@ class OrchestratorService:
             # with this list loaded from it instead of built fresh. Nothing else here
             # changes.
             messages: list[LLMMessage] = [
-                LLMMessage(role="system", content=_PROMPT.render()),
+                LLMMessage(role="system", content=_PROMPT.render(today=date.today().isoformat())),
                 LLMMessage(role="user", content=user_message),
             ]
 
