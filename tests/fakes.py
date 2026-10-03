@@ -4,6 +4,7 @@ Kept Liskov-safe: each double implements the real interface, so it can stand in
 for the production object anywhere the interface is expected.
 """
 
+import asyncio
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 
@@ -81,3 +82,17 @@ class FakeToolGateway(ToolGateway):
     @asynccontextmanager
     async def open_session(self) -> AsyncIterator[ToolSession]:
         yield self._session
+
+
+class SlowToolSession(FakeToolSession):
+    """FakeToolSession whose tool calls take ``delay`` seconds."""
+
+    def __init__(
+        self, *, delay: float, tools: Sequence[ToolDefinition], outcomes: Mapping[str, ToolCallOutcome]
+    ) -> None:
+        super().__init__(tools=tools, outcomes=outcomes)
+        self._delay = delay
+
+    async def call_tool(self, name: str, arguments: Mapping[str, object]) -> ToolCallOutcome:
+        await asyncio.sleep(self._delay)
+        return await super().call_tool(name, arguments)

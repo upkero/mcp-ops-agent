@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Mapping
-from dataclasses import dataclass
+from collections import Counter
+from collections.abc import AsyncIterator, Awaitable, Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from src.app.contracts.agent.agent_event import AgentEvent
@@ -9,6 +11,7 @@ from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.tool_call import ToolCall
 from src.app.core.settings.agent import AgentSettings
+from src.app.exceptions.agent import AgentTimeoutError
 from src.app.interfaces.agent.tool_gateway import ToolGateway, ToolSession
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.prompts import get_prompt
@@ -27,9 +30,27 @@ def _today_label(now: datetime) -> str:
 
 @dataclass
 class _RunState:
-    """What one run has spent so far."""
+    """What one run has spent so far, and when it must be over."""
 
+    deadline: float
+    steps: int = 0
     notifications: int = 0
+    tokens: Counter[str] = field(default_factory=Counter)
+
+
+async def _before_deadline[T](state: _RunState, awaitable: Awaitable[T]) -> T:
+    """Await ``awaitable`` but not past the run's deadline (LLM and tool calls alike)."""
+    try:
+        async with asyncio.timeout_at(state.deadline) as scope:
+            return await awaitable
+    except TimeoutError as exc:
+        if scope.expired():
+            raise AgentTimeoutError() from exc
+        raise
+
+
+def _refused(reason: str) -> ToolCallOutcome:
+    return ToolCallOutcome(content=json.dumps({"status": "refused", "error": reason}), is_error=True)
 
 
 class OrchestratorService:
@@ -42,6 +63,10 @@ class OrchestratorService:
     stub + fake gateway in unit tests, the real client + Streamable-HTTP gateway
     in production — the same loop either way. Every tool call goes through the MCP
     session, so nothing is executed outside the protocol.
+
+    A run is bounded four ways: steps, a wall-clock deadline, tool calls per step and
+    notifications per run. Output length is capped by LLM_MAX_TOKENS, and the tokens a
+    run used are logged when it ends.
     """
 
     def __init__(
@@ -56,51 +81,57 @@ class OrchestratorService:
         self._settings = settings
 
     async def run(self, user_message: str) -> AsyncIterator[AgentEvent]:
-        # One MCP session per run (reused across every turn below), then closed.
-        async with self._gateway.open_session() as session:
-            tools = [self._to_openai_tool(tool) for tool in await session.list_tools()]
-            # NOTE: the conversation is a local list that lives for one run and is
-            # dropped with it. There is no store, and the MCP server is stateless_http,
-            # so a session per run is all there is to keep. The ceiling: the agent has
-            # no memory between requests, so a follow-up like "and the day after?"
-            # arrives with no idea what was asked first. Deliberate at this scale — the
-            # demo is one compound request. The upgrade is the sibling sales-agent's
-            # shape: a ConversationRepository port, in-memory now and Postgres later,
-            # with this list loaded from it instead of built fresh. Nothing else here
-            # changes.
-            messages: list[LLMMessage] = [
-                LLMMessage(role="system", content=_PROMPT.render(today=_today_label(datetime.now().astimezone()))),
-                LLMMessage(role="user", content=user_message),
-            ]
+        state = _RunState(deadline=asyncio.get_running_loop().time() + self._settings.run_timeout_seconds)
+        try:
+            # One MCP session per run (reused across every turn below), then closed.
+            async with self._gateway.open_session() as session:
+                tools = [self._to_openai_tool(tool) for tool in await _before_deadline(state, session.list_tools())]
+                # NOTE: the conversation is a local list that lives for one run and is
+                # dropped with it. There is no store, and the MCP server is stateless_http,
+                # so a session per run is all there is to keep. The ceiling: the agent has
+                # no memory between requests, so a follow-up like "and the day after?"
+                # arrives with no idea what was asked first. Deliberate at this scale — the
+                # demo is one compound request. The upgrade is the sibling sales-agent's
+                # shape: a ConversationRepository port, in-memory now and Postgres later,
+                # with this list loaded from it instead of built fresh. Nothing else here
+                # changes.
+                messages: list[LLMMessage] = [
+                    LLMMessage(role="system", content=_PROMPT.render(today=_today_label(datetime.now().astimezone()))),
+                    LLMMessage(role="user", content=user_message),
+                ]
 
-            state = _RunState()
-            for step in range(self._settings.max_steps):
-                response = await self._llm.complete(messages, tools=tools)
+                for step in range(1, self._settings.max_steps + 1):
+                    state.steps = step
+                    response = await _before_deadline(state, self._llm.complete(messages, tools=tools))
+                    state.tokens.update(response.usage or {})
 
-                if not response.tool_calls:
-                    # The prompt id travels with the answer: when a run looks wrong six
-                    # weeks from now, this says whether the wording had already changed.
-                    logger.info("agent.final", extra={"steps": step + 1, "prompt_id": _PROMPT.id})
-                    yield AgentEvent(type="final", data={"content": response.content})
-                    return
+                    if not response.tool_calls:
+                        yield AgentEvent(type="final", data={"content": response.content})
+                        return
 
-                # Record the assistant turn (with its tool calls) before running them.
-                messages.append(
-                    LLMMessage(
-                        role="assistant",
-                        content=response.content,
-                        tool_calls=response.tool_calls,
+                    # Record the assistant turn (with its tool calls) before running them.
+                    messages.append(
+                        LLMMessage(
+                            role="assistant",
+                            content=response.content,
+                            tool_calls=response.tool_calls,
+                        )
                     )
-                )
-                for call in response.tool_calls:
-                    async for event in self._invoke_tool(session, messages, call, state):
-                        yield event
+                    for index, call in enumerate(response.tool_calls):
+                        async for event in self._invoke_tool(session, messages, call, state, index=index):
+                            yield event
 
-            logger.warning("agent.max_steps", extra={"max_steps": self._settings.max_steps})
-            yield AgentEvent(
-                type="error",
-                data={"message": "Reached the step limit without a final answer."},
-            )
+                logger.warning("agent.max_steps", extra={"max_steps": self._settings.max_steps})
+                yield AgentEvent(
+                    type="error",
+                    data={"message": "Reached the step limit without a final answer."},
+                )
+        finally:
+            # The prompt id travels with the usage: when a run looks wrong six weeks
+            # from now, this says whether the wording had already changed, and what
+            # the run cost.
+            tokens = {f"tokens_{name}": count for name, count in state.tokens.items()}
+            logger.info("agent.usage", extra={"steps": state.steps, "prompt_id": _PROMPT.id, **tokens})
 
     async def _invoke_tool(
         self,
@@ -108,6 +139,8 @@ class OrchestratorService:
         messages: list[LLMMessage],
         call: ToolCall,
         state: _RunState,
+        *,
+        index: int,
     ) -> AsyncIterator[AgentEvent]:
         arguments = self._parse_arguments(call.arguments)
         yield AgentEvent(
@@ -115,7 +148,7 @@ class OrchestratorService:
             data={"id": call.id, "name": call.name, "arguments": arguments},
         )
 
-        outcome = await self._execute(session, call.name, arguments, state)
+        outcome = await self._execute(session, call.name, arguments, state, index=index)
         yield AgentEvent(
             type="tool_result",
             data={
@@ -136,20 +169,25 @@ class OrchestratorService:
         name: str,
         arguments: Mapping[str, object],
         state: _RunState,
+        *,
+        index: int,
     ) -> ToolCallOutcome:
-        # A prompt-injected request ("message every customer") must not turn into a
-        # mass send: past the per-run budget the call is refused without reaching the
-        # tool, and the model is told why.
+        # Every call the model asked for still gets an answer (the provider rejects a
+        # tool call with no result), but past a budget the answer is a refusal that
+        # never reaches the tool — so a prompt-injected "message every customer" or a
+        # fan-out of fifty lookups cannot turn into that many real calls.
+        limit = self._settings.max_tool_calls_per_step
+        if index >= limit:
+            logger.warning("agent.tool_call_limit", extra={"limit": limit})
+            return _refused(f"at most {limit} tool calls per step; ask for the rest in a later step")
         if name == _NOTIFY_TOOL:
             state.notifications += 1
             if state.notifications > self._settings.max_notifications_per_run:
                 logger.warning("agent.notification_limit", extra={"limit": self._settings.max_notifications_per_run})
-                refusal = {
-                    "status": "refused",
-                    "error": f"notification limit of {self._settings.max_notifications_per_run} per request reached",
-                }
-                return ToolCallOutcome(content=json.dumps(refusal), is_error=True)
-        return await session.call_tool(name, arguments)
+                return _refused(
+                    f"notification limit of {self._settings.max_notifications_per_run} per request reached"
+                )
+        return await _before_deadline(state, session.call_tool(name, arguments))
 
     @staticmethod
     def _parse_arguments(raw: str) -> Mapping[str, object]:

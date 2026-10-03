@@ -20,6 +20,17 @@ class AgentSettings(BaseSettings):
         le=25,
         description="Max LLM turns before the agent loop stops requesting tools.",
     )
+    run_timeout_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        description="Wall-clock budget for one whole agent run (LLM and tool calls together).",
+    )
+    max_tool_calls_per_step: int = Field(
+        default=4,
+        ge=1,
+        le=20,
+        description="Tool calls one LLM turn may have executed; the rest are refused.",
+    )
     max_notifications_per_run: int = Field(
         default=3,
         ge=0,

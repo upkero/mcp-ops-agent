@@ -18,3 +18,11 @@ class ToolGatewayUnavailableError(AgentError):
     status_code = 502
     error_code = "tool_gateway_unavailable"
     default_detail = "MCP tool gateway is unavailable."
+
+
+class AgentTimeoutError(AgentError):
+    """The run used up its wall-clock budget (AGENT_RUN_TIMEOUT_SECONDS)."""
+
+    status_code = 504
+    error_code = "agent_timeout"
+    default_detail = "The agent did not finish in time."

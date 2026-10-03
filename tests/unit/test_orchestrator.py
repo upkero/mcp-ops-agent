@@ -1,11 +1,15 @@
+import logging
 from datetime import datetime
+
+import pytest
 
 from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
 from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.tool_call import ToolCall
 from src.app.core.settings.agent import AgentSettings
+from src.app.exceptions.agent import AgentTimeoutError
 from src.app.services.orchestrator import OrchestratorService
-from tests.fakes import FakeToolGateway, FakeToolSession, ScriptedLLMClient
+from tests.fakes import FakeToolGateway, FakeToolSession, ScriptedLLMClient, SlowToolSession
 
 _TOOLS = [
     ToolDefinition("check_calendar_availability", "check a slot", {"type": "object"}),
@@ -131,3 +135,71 @@ async def test_notifications_past_the_per_run_budget_are_refused_without_calling
     results = [event.data for event in events if event.type == "tool_result"]
     assert [result["is_error"] for result in results] == [False, False, True]
     assert "limit of 2" in str(results[2]["content"])
+
+
+def _lookup(call_id: str) -> ToolCall:
+    return ToolCall(id=call_id, name="lookup_customer", arguments='{"name_or_id": "x"}')
+
+
+async def test_a_run_that_outlives_its_deadline_is_stopped() -> None:
+    responses = [LLMResponse(content="", tool_calls=(_lookup("c1"),)), LLMResponse(content="done")]
+    session = SlowToolSession(
+        delay=1.0,
+        tools=_TOOLS,
+        outcomes={"lookup_customer": ToolCallOutcome(content="{}", is_error=False)},
+    )
+    orchestrator = OrchestratorService(
+        llm_client=ScriptedLLMClient(responses),
+        tool_gateway=FakeToolGateway(session),
+        settings=AgentSettings(run_timeout_seconds=0.05),
+    )
+
+    seen: list[str] = []
+    with pytest.raises(AgentTimeoutError):
+        async for event in orchestrator.run("slow"):
+            seen.append(event.type)
+
+    assert seen == ["tool_call"]  # the slow call started, its result never came
+
+
+async def test_tool_calls_past_the_per_step_cap_are_refused_but_still_answered() -> None:
+    responses = [
+        LLMResponse(content="", tool_calls=tuple(_lookup(f"c{i}") for i in range(5))),
+        LLMResponse(content="done"),
+    ]
+    llm = ScriptedLLMClient(responses)
+    session = FakeToolSession(
+        tools=_TOOLS,
+        outcomes={"lookup_customer": ToolCallOutcome(content="{}", is_error=False)},
+    )
+    orchestrator = OrchestratorService(
+        llm_client=llm,
+        tool_gateway=FakeToolGateway(session),
+        settings=AgentSettings(max_tool_calls_per_step=2),
+    )
+
+    events = [event async for event in orchestrator.run("fan out")]
+
+    assert len(session.calls) == 2
+    results = [event.data["is_error"] for event in events if event.type == "tool_result"]
+    assert results == [False, False, True, True, True]
+    # The model got an answer for every call it made (providers reject a dangling one).
+    second_turn = llm.calls[1][0]
+    assert sum(1 for message in second_turn if message.role == "tool") == 5
+
+
+async def test_token_usage_is_summed_across_steps_and_logged(caplog: pytest.LogCaptureFixture) -> None:
+    responses = [
+        LLMResponse(content="", tool_calls=(_lookup("c1"),), usage={"prompt_tokens": 100, "completion_tokens": 10}),
+        LLMResponse(content="done", usage={"prompt_tokens": 150, "completion_tokens": 20}),
+    ]
+    orchestrator, _ = _orchestrator(
+        responses=responses,
+        outcomes={"lookup_customer": ToolCallOutcome(content="{}", is_error=False)},
+    )
+
+    with caplog.at_level(logging.INFO, logger="src.app.services.orchestrator"):
+        [event async for event in orchestrator.run("count tokens")]
+
+    record = next(r for r in caplog.records if r.message == "agent.usage")
+    assert (record.steps, record.tokens_prompt_tokens, record.tokens_completion_tokens) == (2, 250, 30)  # type: ignore[attr-defined]

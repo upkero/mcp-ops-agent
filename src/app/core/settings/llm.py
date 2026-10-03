@@ -59,9 +59,9 @@ class LLMSettings(BaseSettings):
         description="Sampling temperature. Set to None to omit it.",
     )
     max_tokens: int | None = Field(
-        default=None,
+        default=1024,
         gt=0,
-        description="Optional maximum number of output tokens.",
+        description="Maximum output tokens per LLM turn.",
     )
     reasoning_effort: str | None = Field(
         default=None,
