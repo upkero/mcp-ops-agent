@@ -54,8 +54,14 @@ observable step:
 2. Loop up to `AGENT_MAX_STEPS`: `llm.complete(messages, tools=…)`.
    - No tool calls → emit `final`, stop.
    - Tool calls → for each: emit `tool_call`, run it over the session, emit
-     `tool_result`, append the result as a `tool` message; continue.
-3. Step limit reached → emit `error`.
+     `tool_result`, append the result as a `tool` message; continue. Calls past
+     `AGENT_MAX_TOOL_CALLS_PER_STEP`, and `send_notification` calls past
+     `AGENT_MAX_NOTIFICATIONS_PER_RUN`, are answered with a refusal and never reach the tool.
+3. Step limit reached → `AgentStepLimitError`; the whole run past `AGENT_RUN_TIMEOUT_SECONDS`
+   → `AgentTimeoutError`. Either way the route turns it into the terminal `error` event.
+
+The run's token usage (summed over steps) is logged once as `agent.usage`, whatever way the
+run ended.
 
 The `api/v1/routers/invoke.py` SSE route only forwards the message and serialises each
 yielded event as an SSE frame (`core/sse.py`). It knows nothing about the tools.
@@ -80,7 +86,11 @@ shared `ops_core_get` helper retries transport errors, 5xx, and 429/503 (honouri
 `Retry-After`), maps a surviving 404 to `OpsCoreNotFoundError` and any other error
 response to `OpsCoreUnavailableError` (502). Because the SSE response has already started
 when the loop runs, failures during a run are delivered as a terminal `error` **event**,
-not an HTTP error status.
+not an HTTP error status. There is one shape, `{"detail", "error_code"}`, for every cause
+(step limit, timeout, LLM failure, anything unexpected as `internal_server_error`). A tool
+that fails is not a run failure: the model gets a `tool_result` with `is_error` and a short
+fixed text (`invalid_arguments` / `tool_failed`) — FastMCP's own message, which carries
+library names and upstream status lines, is logged and not forwarded.
 
 ## Operational surface
 

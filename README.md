@@ -29,7 +29,7 @@ interface:
 | `list_services()` | Lists every service on the price list with its unit price. |
 | `lookup_customer(name_or_id)` | Finds customers by name fragment or exact UUID. |
 | `calculate_quote(service, quantity)` | Prices a service with volume discounts (money stays exact). |
-| `send_notification(recipient, message)` | **Simulated** — logs the send and returns a receipt; nothing is actually delivered. |
+| `send_notification(recipient, message)` | **Simulated** — logs the send and returns a receipt; nothing is actually delivered. The recipient must be one existing customer (id or full name, checked against `ops-core-api`), the message is at most 1000 characters, and a run may send at most `AGENT_MAX_NOTIFICATIONS_PER_RUN` (3). |
 
 ## Two consumers, one server
 
@@ -79,8 +79,9 @@ somebody else's service over the network.
   SDK / HTTP clients are built).
 - **Adapter** — the httpx `gateways/ops_core/*` adapters and
   `gateways/agent/mcp_tool_gateway.py` (an MCP client behind a plain interface).
-- **Strategy** — `NotificationChannel` (simulated now, real email/SMS later, no service
-  change).
+- **Strategy** — `NotificationChannel` (simulated now; a real email/SMS channel is a new
+  implementation, but read the notification limits under
+  [Exposing this service](#exposing-this-service) first).
 - **Template Method** — the orchestrator's fixed `run()` loop skeleton.
 - **Dependency Inversion** throughout — services depend on interfaces; the DI container
   in `bootstrap/container.py` wires concretes.
@@ -208,6 +209,17 @@ internet, so this is a deployment decision rather than a code one:
   real money.
 - Compose publishes on `127.0.0.1:8003` rather than `0.0.0.0:8003` so none of the above
   can happen by accident on a machine with a public IP.
+- **Without `SECURITY_API_KEY`, `POST /api/v1/invoke` is open to anyone who can reach it**, and
+  through it so is everything the tools return: customer records including their notes. The
+  public demo runs on synthetic data; with real data, set the key first.
+- **`/mcp` is protected only by the SDK's DNS-rebinding check**: a `Host` that is not
+  `localhost`/`127.0.0.1` gets `421`, a foreign `Origin` gets `403`. Behind a reverse proxy
+  that forwards a public `Host`, `/mcp` therefore answers `421`; keep it internal.
+- **What bounds one run:** `AGENT_MAX_STEPS`, `AGENT_RUN_TIMEOUT_SECONDS` (60), at most
+  `AGENT_MAX_TOOL_CALLS_PER_STEP` (4) tool calls per LLM turn, `AGENT_MAX_NOTIFICATIONS_PER_RUN`
+  (3) and `LLM_MAX_TOKENS` (1024) per turn. The tokens a run used are logged as `agent.usage`.
+- **One rate-limit bucket per source address.** Behind a proxy or a site bridge every visitor
+  arrives from the same address and shares the 20 a minute; limit per visitor there.
 
 ## Tests
 
@@ -234,7 +246,7 @@ All via environment (see [`.env.example`](.env.example)); grouped by prefix:
 | `LOG_` | Log level and format (json/text). |
 | `LLM_` | Provider, model, key, base URL — OpenAI-compatible. |
 | `OPS_CORE_` | `ops-core-api` base URL, `X-API-Key`, timeout, total attempts. |
-| `AGENT_` | `MAX_STEPS`, and `MCP_SELF_URL` (the orchestrator's loopback to `/mcp`). |
+| `AGENT_` | `MAX_STEPS`, `RUN_TIMEOUT_SECONDS`, `MAX_TOOL_CALLS_PER_STEP`, `MAX_NOTIFICATIONS_PER_RUN`, and `MCP_SELF_URL` (the orchestrator's loopback to `/mcp/`). |
 | `SECURITY_` | Optional `API_KEY` gating `POST /api/v1/invoke` (unset = open). |
 | `CORS_` | `ALLOWED_ORIGINS`, comma-separated. |
 
@@ -277,7 +289,7 @@ Three things worth knowing before the first run:
 | `list_services()` | Перечисляет все услуги прайс-листа с ценой за единицу. |
 | `lookup_customer(name_or_id)` | Ищет клиентов по фрагменту имени или точному UUID. |
 | `calculate_quote(service, quantity)` | Считает стоимость услуги с объёмными скидками (деньги — точно, без float). |
-| `send_notification(recipient, message)` | **Симуляция** — логирует отправку и возвращает квитанцию; на самом деле ничего не отправляется. |
+| `send_notification(recipient, message)` | **Симуляция** — логирует отправку и возвращает квитанцию; на самом деле ничего не отправляется. Получатель — ровно один существующий клиент (id или полное имя, проверка через `ops-core-api`), сообщение не длиннее 1000 символов, за один запрос не больше `AGENT_MAX_NOTIFICATIONS_PER_RUN` (3). |
 
 ## Два потребителя, один сервер
 
@@ -368,6 +380,18 @@ MCP Inspector (`npx @modelcontextprotocol/inspector`, транспорт «Strea
   деньги.
 - Compose биндит порт на `127.0.0.1`, чтобы ничего из этого не случилось случайно на
   машине с публичным IP.
+- **Без `SECURITY_API_KEY` `POST /api/v1/invoke` открыт всем, кто до него дотянется**, а вместе
+  с ним — всё, что отдают инструменты, включая заметки о клиентах. Публичное демо работает на
+  синтетических данных; с реальными данными сначала задайте ключ.
+- **`/mcp` защищён только проверкой DNS-rebinding из SDK**: `Host`, отличный от
+  `localhost`/`127.0.0.1`, получает `421`, чужой `Origin` — `403`. За реверс-прокси, который
+  передаёт публичный `Host`, `/mcp` ответит `421`; держите его внутри.
+- **Что ограничивает один запуск:** `AGENT_MAX_STEPS`, `AGENT_RUN_TIMEOUT_SECONDS` (60), не
+  больше `AGENT_MAX_TOOL_CALLS_PER_STEP` (4) вызовов инструментов за ход LLM,
+  `AGENT_MAX_NOTIFICATIONS_PER_RUN` (3) и `LLM_MAX_TOKENS` (1024) на ход. Израсходованные
+  токены пишутся в лог как `agent.usage`.
+- **Один бакет рейт-лимита на адрес источника.** За прокси или мостом сайта все посетители
+  приходят с одного адреса и делят 20 в минуту; лимитируйте по посетителю там.
 
 ## Тесты
 
