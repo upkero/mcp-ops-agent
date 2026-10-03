@@ -16,6 +16,17 @@ from collections.abc import Iterator  # noqa: E402
 import pytest  # noqa: E402
 
 from src.app.api.v1.middleware.rate_limit import reset_rate_limit  # noqa: E402
+from src.app.core.settings.agent import AgentSettings  # noqa: E402
+from src.app.core.settings.app import AppSettings  # noqa: E402
+from src.app.core.settings.llm import LLMSettings  # noqa: E402
+from src.app.core.settings.logging import LoggingSettings  # noqa: E402
+from src.app.core.settings.ops_core import OpsCoreSettings  # noqa: E402
+from src.app.core.settings.security import SecuritySettings  # noqa: E402
+
+# A developer's local .env must not change what the tests see (a SECURITY_API_KEY in
+# it turns every invoke test into a 401). Environment variables set above still apply.
+for _settings in (AgentSettings, AppSettings, LLMSettings, LoggingSettings, OpsCoreSettings, SecuritySettings):
+    _settings.model_config["env_file"] = None
 
 
 @pytest.fixture(autouse=True)
