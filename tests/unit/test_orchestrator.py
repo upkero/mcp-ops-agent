@@ -107,3 +107,27 @@ async def test_the_run_tells_the_model_what_day_it_is() -> None:
 
     system_prompt = llm.calls[0][0][0].content
     assert datetime.now().strftime("%A %Y-%m-%d") in system_prompt
+
+
+async def test_notifications_past_the_per_run_budget_are_refused_without_calling_the_tool() -> None:
+    notify = ToolCall(id="n", name="send_notification", arguments='{"recipient": "Anna", "message": "hi"}')
+    responses = [
+        LLMResponse(content="", tool_calls=(notify, notify, notify)),
+        LLMResponse(content="done"),
+    ]
+    session = FakeToolSession(
+        tools=_TOOLS,
+        outcomes={"send_notification": ToolCallOutcome(content='{"status": "simulated"}', is_error=False)},
+    )
+    orchestrator = OrchestratorService(
+        llm_client=ScriptedLLMClient(responses),
+        tool_gateway=FakeToolGateway(session),
+        settings=AgentSettings(max_notifications_per_run=2),
+    )
+
+    events = [event async for event in orchestrator.run("notify everyone")]
+
+    assert len(session.calls) == 2
+    results = [event.data for event in events if event.type == "tool_result"]
+    assert [result["is_error"] for result in results] == [False, False, True]
+    assert "limit of 2" in str(results[2]["content"])

@@ -13,7 +13,9 @@ from mcp.shared.memory import create_connected_server_and_client_session
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.ops_core.availability_slot import AvailabilitySlot
+from src.app.interfaces.notifications.channel import NotificationChannel
 from src.app.interfaces.ops_core.availability import AvailabilityGateway
+from src.app.interfaces.ops_core.customers import CustomerGateway
 from src.app.mcp.v1.server import build_mcp_server
 
 _EXPECTED_TOOLS = {
@@ -70,6 +72,8 @@ _INVALID_CALLS = [
     ("calculate_quote", {"service": "", "quantity": 1}),
     ("lookup_customer", {"name_or_id": ""}),
     ("send_notification", {"recipient": "Anna", "message": ""}),
+    ("send_notification", {"recipient": "Anna", "message": "x" * 1001}),
+    ("send_notification", {"recipient": "a" * 101, "message": "hi"}),
 ]
 
 
@@ -99,3 +103,23 @@ async def test_availability_tool_offers_every_ops_core_resource_type() -> None:
     resource_type = tools["check_calendar_availability"].inputSchema["properties"]["resource_type"]
     assert set(resource_type["enum"]) == _OPS_CORE_RESOURCE_TYPES
     assert "treatment_room" in resource_type["description"]
+
+
+async def test_notifying_a_stranger_is_reported_back_not_sent() -> None:
+    gateway = AsyncMock(spec=CustomerGateway)
+    gateway.search.return_value = []
+    channel = AsyncMock(spec=NotificationChannel)
+    container = ApplicationContainer()
+    container.__dict__["customer_gateway"] = gateway
+    container.__dict__["notification_channel"] = channel
+    server = build_mcp_server(container)
+
+    async with create_connected_server_and_client_session(server._mcp_server) as session:
+        result = await session.call_tool(
+            "send_notification", {"recipient": "+1-555-0199", "message": "Call us now"}
+        )
+
+    assert result.isError is False
+    assert result.structuredContent is not None
+    assert result.structuredContent["status"] == "rejected"
+    channel.send.assert_not_awaited()

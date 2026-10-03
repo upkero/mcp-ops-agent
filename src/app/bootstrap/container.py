@@ -93,7 +93,7 @@ class ApplicationContainer:
 
     @cached_property
     def notification_service(self) -> NotificationService:
-        return NotificationService(channel=self.notification_channel)
+        return NotificationService(channel=self.notification_channel, customers=self.customer_service)
 
     @cached_property
     def orchestrator(self) -> OrchestratorService:

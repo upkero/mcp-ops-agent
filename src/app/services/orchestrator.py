@@ -1,10 +1,11 @@
 import json
 import logging
 from collections.abc import AsyncIterator, Mapping
+from dataclasses import dataclass
 from datetime import datetime
 
 from src.app.contracts.agent.agent_event import AgentEvent
-from src.app.contracts.agent.tool_catalog import ToolDefinition
+from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.tool_call import ToolCall
 from src.app.core.settings.agent import AgentSettings
@@ -15,12 +16,20 @@ from src.app.prompts import get_prompt
 logger = logging.getLogger(__name__)
 
 _PROMPT = get_prompt("ops_agent.system")
+_NOTIFY_TOOL = "send_notification"
 
 
 def _today_label(now: datetime) -> str:
     # The weekday is spelled out: a model given only an ISO date cannot reliably say
     # which day "next Monday" is. The zone says which "today" the server means.
     return f"{now.strftime('%A %Y-%m-%d')} ({now.tzname()})"
+
+
+@dataclass
+class _RunState:
+    """What one run has spent so far."""
+
+    notifications: int = 0
 
 
 class OrchestratorService:
@@ -64,6 +73,7 @@ class OrchestratorService:
                 LLMMessage(role="user", content=user_message),
             ]
 
+            state = _RunState()
             for step in range(self._settings.max_steps):
                 response = await self._llm.complete(messages, tools=tools)
 
@@ -83,7 +93,7 @@ class OrchestratorService:
                     )
                 )
                 for call in response.tool_calls:
-                    async for event in self._invoke_tool(session, messages, call):
+                    async for event in self._invoke_tool(session, messages, call, state):
                         yield event
 
             logger.warning("agent.max_steps", extra={"max_steps": self._settings.max_steps})
@@ -97,6 +107,7 @@ class OrchestratorService:
         session: ToolSession,
         messages: list[LLMMessage],
         call: ToolCall,
+        state: _RunState,
     ) -> AsyncIterator[AgentEvent]:
         arguments = self._parse_arguments(call.arguments)
         yield AgentEvent(
@@ -104,7 +115,7 @@ class OrchestratorService:
             data={"id": call.id, "name": call.name, "arguments": arguments},
         )
 
-        outcome = await session.call_tool(call.name, arguments)
+        outcome = await self._execute(session, call.name, arguments, state)
         yield AgentEvent(
             type="tool_result",
             data={
@@ -118,6 +129,27 @@ class OrchestratorService:
         messages.append(
             LLMMessage(role="tool", content=outcome.content, tool_call_id=call.id, name=call.name)
         )
+
+    async def _execute(
+        self,
+        session: ToolSession,
+        name: str,
+        arguments: Mapping[str, object],
+        state: _RunState,
+    ) -> ToolCallOutcome:
+        # A prompt-injected request ("message every customer") must not turn into a
+        # mass send: past the per-run budget the call is refused without reaching the
+        # tool, and the model is told why.
+        if name == _NOTIFY_TOOL:
+            state.notifications += 1
+            if state.notifications > self._settings.max_notifications_per_run:
+                logger.warning("agent.notification_limit", extra={"limit": self._settings.max_notifications_per_run})
+                refusal = {
+                    "status": "refused",
+                    "error": f"notification limit of {self._settings.max_notifications_per_run} per request reached",
+                }
+                return ToolCallOutcome(content=json.dumps(refusal), is_error=True)
+        return await session.call_tool(name, arguments)
 
     @staticmethod
     def _parse_arguments(raw: str) -> Mapping[str, object]:

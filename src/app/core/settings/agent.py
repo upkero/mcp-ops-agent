@@ -20,6 +20,12 @@ class AgentSettings(BaseSettings):
         le=25,
         description="Max LLM turns before the agent loop stops requesting tools.",
     )
+    max_notifications_per_run: int = Field(
+        default=3,
+        ge=0,
+        le=50,
+        description="Max send_notification calls one agent run may make; further ones are refused.",
+    )
     mcp_self_url: str = Field(
         default="http://localhost:8000/mcp",
         description="URL of this server's own mounted MCP endpoint (Streamable HTTP).",
