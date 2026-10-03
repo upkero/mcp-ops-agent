@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock
 
 import httpx
+import pytest
 from fastapi import FastAPI
 
 from src.app.bootstrap.container import ApplicationContainer
@@ -55,3 +56,16 @@ async def test_readiness_503_when_the_llm_is_down_and_names_it() -> None:
 
     assert response.status_code == 503
     assert "llm" in response.json()["detail"]
+
+
+async def test_a_misconfiguration_fails_the_boot_not_the_first_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A container property that cannot be built stands in for any misconfiguration.
+    def broken(self: ApplicationContainer) -> None:
+        raise RuntimeError("misconfigured")
+
+    monkeypatch.setattr(ApplicationContainer, "orchestrator", property(broken))
+    app = create_app()
+
+    with pytest.raises(RuntimeError, match="misconfigured"):
+        async with app.router.lifespan_context(app):
+            pass

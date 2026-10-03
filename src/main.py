@@ -14,6 +14,7 @@ from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.logging import setup_logging
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.logging import get_logging_settings
+from src.app.core.settings.security import get_security_settings
 from src.app.mcp.v1.server import build_mcp_server
 
 
@@ -32,6 +33,17 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # The container is lazy; build what the routes and the MCP tools use now,
+        # so a misconfiguration fails the boot instead of the first request.
+        _ = (
+            container.orchestrator,
+            container.ops_core_health_probe,
+            container.availability_service,
+            container.customer_service,
+            container.pricing_service,
+            container.notification_service,
+            get_security_settings(),
+        )
         # Mounted sub-apps do not receive Starlette lifespan events, so the MCP
         # session manager must be run here for the /mcp endpoint to serve requests.
         async with mcp_server.session_manager.run():
