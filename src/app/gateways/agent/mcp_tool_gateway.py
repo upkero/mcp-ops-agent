@@ -34,7 +34,20 @@ class _McpToolSession(ToolSession):
 
     async def call_tool(self, name: str, arguments: Mapping[str, object]) -> ToolCallOutcome:
         result = await self._session.call_tool(name, dict(arguments))
-        return ToolCallOutcome(content=self._render(result), is_error=bool(result.isError))
+        if result.isError:
+            return ToolCallOutcome(content=self._safe_error(name, self._render(result)), is_error=True)
+        return ToolCallOutcome(content=self._render(result), is_error=False)
+
+    @staticmethod
+    def _safe_error(name: str, raw: str) -> str:
+        # FastMCP reports a failed tool as str(exception): pydantic's multi-line
+        # report with library names and doc URLs, or an upstream status line. The
+        # text goes to the model AND, verbatim, to the browser, so it is replaced
+        # by a short fixed one; the original stays in the log.
+        logger.warning("agent.tool_error", extra={"tool": name, "error": raw[:500]})
+        if "validation error" in raw:
+            return json.dumps({"error": "invalid_arguments", "detail": "The arguments do not match the tool's schema."})
+        return json.dumps({"error": "tool_failed", "detail": "The tool could not complete the request."})
 
     @staticmethod
     def _render(result: Any) -> str:

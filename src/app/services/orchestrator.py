@@ -11,7 +11,7 @@ from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.tool_call import ToolCall
 from src.app.core.settings.agent import AgentSettings
-from src.app.exceptions.agent import AgentTimeoutError
+from src.app.exceptions.agent import AgentStepLimitError, AgentTimeoutError
 from src.app.interfaces.agent.tool_gateway import ToolGateway, ToolSession
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.prompts import get_prompt
@@ -122,10 +122,7 @@ class OrchestratorService:
                             yield event
 
                 logger.warning("agent.max_steps", extra={"max_steps": self._settings.max_steps})
-                yield AgentEvent(
-                    type="error",
-                    data={"message": "Reached the step limit without a final answer."},
-                )
+                raise AgentStepLimitError()
         finally:
             # The prompt id travels with the usage: when a run looks wrong six weeks
             # from now, this says whether the wording had already changed, and what

@@ -26,3 +26,10 @@ class AgentTimeoutError(AgentError):
     status_code = 504
     error_code = "agent_timeout"
     default_detail = "The agent did not finish in time."
+
+
+class AgentStepLimitError(AgentError):
+    """The model kept asking for tools and never produced a final answer."""
+
+    error_code = "agent_step_limit"
+    default_detail = "The agent reached its step limit without a final answer."

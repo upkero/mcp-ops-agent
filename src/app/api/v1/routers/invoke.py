@@ -43,7 +43,7 @@ async def invoke(body: InvokeRequest, orchestrator: OrchestratorDep) -> Streamin
             yield format_sse(
                 AgentEvent(
                     type="error",
-                    data={"error_code": "internal_error", "detail": "Agent run failed."},
+                    data={"error_code": "internal_server_error", "detail": "Agent run failed."},
                 )
             )
 

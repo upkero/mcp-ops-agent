@@ -3,11 +3,12 @@ from datetime import datetime
 
 import pytest
 
+from src.app.contracts.agent.agent_event import AgentEvent
 from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
 from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.tool_call import ToolCall
 from src.app.core.settings.agent import AgentSettings
-from src.app.exceptions.agent import AgentTimeoutError
+from src.app.exceptions.agent import AgentStepLimitError, AgentTimeoutError
 from src.app.services.orchestrator import OrchestratorService
 from tests.fakes import FakeToolGateway, FakeToolSession, ScriptedLLMClient, SlowToolSession
 
@@ -84,7 +85,7 @@ async def test_arguments_are_parsed_from_json_before_the_call() -> None:
     assert session.calls[0][1] == {"name_or_id": "Anna"}
 
 
-async def test_step_limit_stops_the_loop_with_an_error_event() -> None:
+async def test_step_limit_stops_the_loop_with_a_typed_error() -> None:
     # The model keeps asking for tools forever; the loop must stop at max_steps.
     looping = LLMResponse(
         content="",
@@ -93,9 +94,11 @@ async def test_step_limit_stops_the_loop_with_an_error_event() -> None:
     outcomes = {"lookup_customer": ToolCallOutcome(content="{}", is_error=False)}
     orchestrator, _ = _orchestrator(responses=[looping], outcomes=outcomes, max_steps=2)
 
-    events = [event async for event in orchestrator.run("loop forever")]
+    events: list[AgentEvent] = []
+    with pytest.raises(AgentStepLimitError):
+        async for event in orchestrator.run("loop forever"):
+            events.append(event)
 
-    assert events[-1].type == "error"
     assert sum(1 for event in events if event.type == "tool_call") == 2
 
 
