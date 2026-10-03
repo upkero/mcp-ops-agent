@@ -83,3 +83,19 @@ async def test_invalid_arguments_are_rejected_by_the_protocol(
         result = await session.call_tool(tool_name, arguments)
 
     assert result.isError is True
+
+
+# ops-core-api's ResourceType values (contracts/enums.py). Keep in step with it: a value
+# missing here makes the agent substitute another resource and answer confidently wrong.
+_OPS_CORE_RESOURCE_TYPES = {"table", "meeting_room", "treatment_room"}
+
+
+async def test_availability_tool_offers_every_ops_core_resource_type() -> None:
+    server = build_mcp_server(ApplicationContainer())
+
+    async with create_connected_server_and_client_session(server._mcp_server) as session:
+        tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+
+    resource_type = tools["check_calendar_availability"].inputSchema["properties"]["resource_type"]
+    assert set(resource_type["enum"]) == _OPS_CORE_RESOURCE_TYPES
+    assert "treatment_room" in resource_type["description"]

@@ -18,7 +18,10 @@ def register(mcp: FastMCP, container: ApplicationContainer) -> None:
     async def check_calendar_availability(
         date: Annotated[Date, Field(description="Calendar date to check, ISO 8601 (YYYY-MM-DD).")],
         time: Annotated[Time, Field(description="Start time to check, 24-hour HH:MM.")],
-        resource_type: Annotated[ResourceType, Field(description="Resource kind: 'table' or 'meeting_room'.")],
+        resource_type: Annotated[
+            ResourceType,
+            Field(description="Resource kind: 'table', 'meeting_room' or 'treatment_room' (clinic treatments)."),
+        ],
     ) -> dict[str, object]:
         """Check whether a calendar slot is free for a date, time and resource type.
 
