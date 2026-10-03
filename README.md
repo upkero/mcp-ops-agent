@@ -106,7 +106,7 @@ docker compose up --build     # agent on http://127.0.0.1:8003
 
 The port is published on **loopback only** (`127.0.0.1:8003:8000`) on purpose — see
 [Exposing this service](#exposing-this-service). Inside the container it still listens on
-8000, which is why `AGENT_MCP_SELF_URL` stays `http://localhost:8000/mcp`. With
+8000, which is why `AGENT_MCP_SELF_URL` stays `http://localhost:8000/mcp/`. With
 `ops-core-api` running on the host, set
 `OPS_CORE_BASE_URL=http://host.docker.internal:8000`.
 
@@ -115,7 +115,7 @@ the same port or the orchestrator will call nothing:
 
 ```bash
 uv sync
-AGENT_MCP_SELF_URL=http://localhost:8003/mcp \
+AGENT_MCP_SELF_URL=http://localhost:8003/mcp/ \
   uv run uvicorn src.main:app --reload --port 8003
 ```
 
@@ -319,7 +319,7 @@ docker compose up --build         # агент на http://127.0.0.1:8003
 
 Порт публикуется только на loopback (`127.0.0.1:8003:8000`) — см. «Публикация наружу».
 Внутри контейнера сервис слушает 8000, поэтому `AGENT_MCP_SELF_URL` остаётся
-`http://localhost:8000/mcp`. Если `ops-core-api` поднят на хосте, задайте
+`http://localhost:8000/mcp/`. Если `ops-core-api` поднят на хосте, задайте
 `OPS_CORE_BASE_URL=http://host.docker.internal:8000`.
 
 Без Docker — берите 8003, чтобы 8000 остался за `ops-core-api`, и переведите
@@ -327,7 +327,7 @@ self-loopback на тот же порт:
 
 ```bash
 uv sync
-AGENT_MCP_SELF_URL=http://localhost:8003/mcp \
+AGENT_MCP_SELF_URL=http://localhost:8003/mcp/ \
   uv run uvicorn src.main:app --reload --port 8003
 ```
 

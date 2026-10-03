@@ -6,8 +6,10 @@ from typing import Any
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 
 from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
+from src.app.core.request_id import get_request_id
 from src.app.core.settings.agent import AgentSettings
 from src.app.exceptions.agent import ToolGatewayUnavailableError
 from src.app.interfaces.agent.tool_gateway import ToolGateway, ToolSession
@@ -78,19 +80,18 @@ class McpToolGateway(ToolGateway):
 
     @asynccontextmanager
     async def open_session(self) -> AsyncIterator[ToolSession]:
-        # NOTE: the X-Request-ID chain deliberately ends here. Outbound calls to
-        # ops-core-api carry it (an httpx event hook in gateways/ops_core/client),
-        # but this hop is the MCP SDK's own transport: streamable_http_client takes
-        # no headers, only a whole httpx.AsyncClient, and supplying one means
-        # re-creating the SDK's tuned defaults from a private helper and owning its
-        # lifecycle — real coupling to buy a header on a loopback call that never
-        # leaves the process. The tool call is already logged on both sides of it
-        # under the incoming id, so the trace has no gap that matters.
-        #
+        # The incoming X-Request-ID rides the loopback too: streamable_http_client takes
+        # headers only through a whole httpx client, so one is built per run (the id is
+        # per request, the gateway is built once). The MCP server's request-id middleware
+        # reuses it, so a tool's logs and its ops-core call carry the id the caller saw.
+        request_id = get_request_id()
+        headers = {"X-Request-ID": request_id} if request_id else None
+
         # Only the connect/initialise phase is wrapped — errors from the yielded
         # body (the orchestrator's own logic) must propagate unchanged.
         async with (
-            streamable_http_client(self._url) as (read, write, _get_session_id),
+            create_mcp_http_client(headers=headers) as http_client,
+            streamable_http_client(self._url, http_client=http_client) as (read, write, _get_session_id),
             ClientSession(read, write) as session,
         ):
             try:

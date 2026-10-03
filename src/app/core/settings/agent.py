@@ -11,7 +11,8 @@ class AgentSettings(BaseSettings):
     server's own mounted MCP endpoint over real Streamable HTTP — the same URL an
     external client (Claude Desktop) would use. Routing the internal agent through
     the network transport is what guarantees there is no tool path that bypasses
-    the MCP protocol.
+    the MCP protocol. The trailing slash is deliberate: the mount answers ``/mcp``
+    with a 307 to ``/mcp/``, which every loopback call would otherwise pay.
     """
 
     max_steps: int = Field(
@@ -38,7 +39,7 @@ class AgentSettings(BaseSettings):
         description="Max send_notification calls one agent run may make; further ones are refused.",
     )
     mcp_self_url: str = Field(
-        default="http://localhost:8000/mcp",
+        default="http://localhost:8000/mcp/",
         description="URL of this server's own mounted MCP endpoint (Streamable HTTP).",
     )
 

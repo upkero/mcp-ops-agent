@@ -22,6 +22,7 @@ from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.tool_call import ToolCall
 from src.app.contracts.ops_core.availability_slot import AvailabilitySlot
 from src.app.contracts.ops_core.customer import Customer
+from src.app.core.request_id import get_request_id
 from src.app.core.settings.agent import AgentSettings
 from src.app.gateways.agent.mcp_tool_gateway import McpToolGateway
 from src.app.interfaces.ops_core.availability import AvailabilityGateway
@@ -66,11 +67,17 @@ def _parse_sse(body: str) -> list[tuple[str, str]]:
     return frames
 
 
-def _build_container(port: int) -> ApplicationContainer:
+def _build_container(port: int, seen_ids: list[str] | None = None) -> ApplicationContainer:
     availability = AsyncMock(spec=AvailabilityGateway)
-    availability.list_slots.return_value = [
-        AvailabilitySlot("s1", "table", "2026-07-25", "18:00:00", 4, True)
-    ]
+    slots = [AvailabilitySlot("s1", "table", "2026-07-25", "18:00:00", 4, True)]
+    availability.list_slots.return_value = slots
+    if seen_ids is not None:
+
+        async def _record_request_id(*args: object, **kwargs: object) -> list[AvailabilitySlot]:
+            seen_ids.append(get_request_id())
+            return slots
+
+        availability.list_slots.side_effect = _record_request_id
     customers = AsyncMock(spec=CustomerGateway)
     customers.search.return_value = [Customer("c1", "Anna Petrova", "active", None, None)]
 
@@ -103,7 +110,7 @@ def _build_container(port: int) -> ApplicationContainer:
     container.__dict__["llm_client"] = llm
     # The REAL gateway, pointed at this server's own /mcp over the loopback.
     container.__dict__["tool_gateway"] = McpToolGateway(
-        settings=AgentSettings(mcp_self_url=f"http://127.0.0.1:{port}/mcp")
+        settings=AgentSettings(mcp_self_url=f"http://127.0.0.1:{port}/mcp/")
     )
     return container
 
@@ -134,3 +141,33 @@ async def test_compound_request_streams_two_tool_calls_and_a_final_answer() -> N
     assert "lookup_customer" in tool_calls[1]
     assert event_types[-1] == "final"
     assert "Anna Petrova" in frames[-1][1]
+
+
+async def test_the_callers_request_id_reaches_the_tool_over_the_loopback() -> None:
+    port = _free_port()
+    seen_ids: list[str] = []
+    app = create_app(container=_build_container(port, seen_ids))
+
+    async with (
+        _serve(app, port) as base_url,
+        httpx.AsyncClient(base_url=base_url, timeout=30.0) as client,
+    ):
+        await client.post(
+            "/api/v1/invoke",
+            json={"message": "check the 18:00 table"},
+            headers={"X-Request-ID": "trace-me-123"},
+        )
+
+    assert seen_ids == ["trace-me-123"]
+
+
+async def test_the_default_loopback_url_is_served_without_a_redirect() -> None:
+    port = _free_port()
+    app = create_app(container=_build_container(port))
+    url = AgentSettings().mcp_self_url.replace("localhost:8000", f"127.0.0.1:{port}")
+
+    async with _serve(app, port), httpx.AsyncClient(follow_redirects=False) as client:
+        response = await client.post(url, json={})
+
+    assert url.endswith("/mcp/")
+    assert response.status_code != 307
