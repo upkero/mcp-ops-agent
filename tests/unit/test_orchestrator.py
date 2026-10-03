@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
 from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.tool_call import ToolCall
@@ -91,3 +93,17 @@ async def test_step_limit_stops_the_loop_with_an_error_event() -> None:
 
     assert events[-1].type == "error"
     assert sum(1 for event in events if event.type == "tool_call") == 2
+
+
+async def test_the_run_tells_the_model_what_day_it_is() -> None:
+    llm = ScriptedLLMClient([LLMResponse(content="ok")])
+    orchestrator = OrchestratorService(
+        llm_client=llm,
+        tool_gateway=FakeToolGateway(FakeToolSession(tools=_TOOLS, outcomes={})),
+        settings=AgentSettings(),
+    )
+
+    [event async for event in orchestrator.run("is a table free next Monday?")]
+
+    system_prompt = llm.calls[0][0][0].content
+    assert datetime.now().strftime("%A %Y-%m-%d") in system_prompt

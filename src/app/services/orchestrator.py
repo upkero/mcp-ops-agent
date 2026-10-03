@@ -1,7 +1,7 @@
 import json
 import logging
 from collections.abc import AsyncIterator, Mapping
-from datetime import date
+from datetime import datetime
 
 from src.app.contracts.agent.agent_event import AgentEvent
 from src.app.contracts.agent.tool_catalog import ToolDefinition
@@ -15,6 +15,12 @@ from src.app.prompts import get_prompt
 logger = logging.getLogger(__name__)
 
 _PROMPT = get_prompt("ops_agent.system")
+
+
+def _today_label(now: datetime) -> str:
+    # The weekday is spelled out: a model given only an ISO date cannot reliably say
+    # which day "next Monday" is. The zone says which "today" the server means.
+    return f"{now.strftime('%A %Y-%m-%d')} ({now.tzname()})"
 
 
 class OrchestratorService:
@@ -54,7 +60,7 @@ class OrchestratorService:
             # with this list loaded from it instead of built fresh. Nothing else here
             # changes.
             messages: list[LLMMessage] = [
-                LLMMessage(role="system", content=_PROMPT.render(today=date.today().isoformat())),
+                LLMMessage(role="system", content=_PROMPT.render(today=_today_label(datetime.now().astimezone()))),
                 LLMMessage(role="user", content=user_message),
             ]
 

@@ -1,6 +1,9 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from src.app.prompts import Prompt, get_prompt
+from src.app.services.orchestrator import _today_label
 
 
 def test_the_agent_system_prompt_is_loaded_from_disk() -> None:
@@ -27,3 +30,12 @@ def test_render_refuses_to_guess_at_a_missing_placeholder() -> None:
         prompt.render(reply_language="English")
 
     assert prompt.render(reply_language="English", topic="slots") == "Reply in English about slots."
+
+
+def test_the_system_prompt_gives_the_weekday_and_zone_of_today() -> None:
+    # 2026-10-03 was a Saturday; "next Monday" is only computable if the prompt says so.
+    now = datetime(2026, 10, 3, 9, 0, tzinfo=timezone(timedelta(hours=3), "MSK"))
+
+    rendered = get_prompt("ops_agent.system").render(today=_today_label(now))
+
+    assert "Today is Saturday 2026-10-03 (MSK)." in rendered
