@@ -123,3 +123,14 @@ async def test_notifying_a_stranger_is_reported_back_not_sent() -> None:
     assert result.structuredContent is not None
     assert result.structuredContent["status"] == "rejected"
     channel.send.assert_not_awaited()
+
+
+async def test_tool_descriptions_are_written_for_the_model_not_the_developer() -> None:
+    server = build_mcp_server(ApplicationContainer())
+
+    async with create_connected_server_and_client_session(server._mcp_server) as session:
+        tools = (await session.list_tools()).tools
+
+    for tool in tools:
+        assert "FastMCP" not in (tool.description or ""), tool.name
+        assert "JSON Schema" not in (tool.description or ""), tool.name
