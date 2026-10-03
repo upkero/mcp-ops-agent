@@ -8,12 +8,6 @@ class LLMError(BaseAppException):
     default_detail = "LLM operation failed."
 
 
-class LLMConfigurationError(LLMError):
-    """Raised when LLM client configuration is invalid."""
-
-    error_code = "llm_configuration_error"
-
-
 class LLMInputError(LLMError, ValueError):
     """Raised when LLM input payload is invalid."""
 
@@ -26,14 +20,3 @@ class LLMGenerationError(LLMError):
 
     error_code = "llm_generation_error"
 
-
-class GenerationUnavailableError(LLMError):
-    """Raised when the LLM provider is unreachable or failing.
-
-    Surfaces as a 502 (upstream failure) so the API returns a clean error
-    envelope instead of leaking a raw provider error.
-    """
-
-    status_code = 502
-    error_code = "generation_unavailable"
-    default_detail = "Answer generation service is unavailable."
