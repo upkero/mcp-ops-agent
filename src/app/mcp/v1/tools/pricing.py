@@ -22,7 +22,9 @@ def register(mcp: FastMCP, container: ApplicationContainer) -> None:
 
     @mcp.tool()
     async def calculate_quote(
-        service: Annotated[str, Field(min_length=1, description="Exact service name to price, as returned by list_services.")],
+        service: Annotated[
+            str, Field(min_length=1, description="Exact service name to price, as returned by list_services.")
+        ],
         quantity: Annotated[int, Field(ge=1, le=1000, description="Number of units/sessions to quote.")],
     ) -> dict[str, object]:
         """Calculate a price quote for a service and quantity (volume discounts apply).
