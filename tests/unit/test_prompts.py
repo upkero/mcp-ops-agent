@@ -39,3 +39,11 @@ def test_the_system_prompt_gives_the_weekday_and_zone_of_today() -> None:
     rendered = get_prompt("ops_agent.system").render(today=_today_label(now))
 
     assert "Today is Saturday 2026-10-03 (MSK)." in rendered
+
+
+def test_the_system_prompt_forbids_claiming_bookings_the_agent_cannot_make() -> None:
+    text = " ".join(get_prompt("ops_agent.system").text.split())  # ignore line wrapping
+
+    assert "cannot create, change or cancel bookings" in text
+    assert "Never state or imply that an action happened unless a tool call" in text
+    assert "must never say that a booking" in text
