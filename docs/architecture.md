@@ -16,7 +16,7 @@ Alongside `api/v1/` there is a versioned MCP layer that mirrors it one-for-one:
 The dependency rule is identical to `api/v1/`: **`mcp/v1/tools/` calls `services/` and
 never contains business logic** — a tool only validates its arguments (a Pydantic model,
 from which FastMCP derives the JSON Schema) and shapes the service result into a
-JSON-safe payload. The four tools are declared exactly once, in `mcp/v1/tools/`, and
+JSON-safe payload. The five tools are declared exactly once, in `mcp/v1/tools/`, and
 registered on a single FastMCP instance by `mcp/v1/server.py`.
 
 ## One server, mounted once
@@ -25,8 +25,8 @@ registered on a single FastMCP instance by `mcp/v1/server.py`.
 (`build_mcp_server(container)`), and mounts its Streamable HTTP ASGI app at `/mcp`. The
 MCP session manager is run inside the FastAPI lifespan (mounted sub-apps do not receive
 Starlette lifespan events, so this is required). `stateless_http=True` keeps each request
-self-contained; `streamable_http_path="/"` makes the mounted endpoint resolve to exactly
-`/mcp`.
+self-contained; `streamable_http_path="/"` makes the mounted endpoint resolve to
+`/mcp/` (a request to `/mcp` is redirected with a 307).
 
 ## The two consumers and the "no bypass" guarantee
 
@@ -87,7 +87,8 @@ not an HTTP error status.
 - `GET /health/live` — the process is up. Checks nothing else, so a container is never
   killed because OpenAI is having a bad morning. This is what Docker's `HEALTHCHECK` polls.
 - `GET /health/ready` — pings both upstreams (LLM + ops-core-api via
-  `OpsCoreHealthChecker`) and returns 503 when either is down.
+  `OpsCoreHealthChecker`) and returns `{"status":"ok"}`, or 503 with
+  `{"detail":"dependencies unavailable: llm", ...}` naming the failing dependency.
 - `POST /api/v1/invoke` is gated by an optional `X-API-Key` (`SECURITY_API_KEY`): open
   when unset (demo friendly), required when set. It is also the one path behind a per-IP
   rate limit (`api/v1/middleware/rate_limit.py`), because one call to it can drive up to

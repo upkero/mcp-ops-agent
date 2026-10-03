@@ -20,12 +20,13 @@ MCP + orchestration layer.
 
 ## What it does
 
-Four MCP tools, each a thin wrapper over a service that calls `ops-core-api` through an
+Five MCP tools, each a thin wrapper over a service that calls `ops-core-api` through an
 interface:
 
 | Tool | Does |
 |------|------|
 | `check_calendar_availability(date, time, resource_type)` | Is a slot free? Returns match/availability/capacity and other free times that day. |
+| `list_services()` | Lists every service on the price list with its unit price. |
 | `lookup_customer(name_or_id)` | Finds customers by name fragment or exact UUID. |
 | `calculate_quote(service, quantity)` | Prices a service with volume discounts (money stays exact). |
 | `send_notification(recipient, message)` | **Simulated** — logs the send and returns a receipt; nothing is actually delivered. |
@@ -149,7 +150,7 @@ data: {"content":"The 18:00 table is free tomorrow (seats 4), and I found Anna P
 
 ```bash
 curl http://localhost:8003/health/live     # {"status":"ok"}
-curl http://localhost:8003/health/ready    # {"status":"ok","llm":true,"ops_core":true}; 503 if either is down
+curl http://localhost:8003/health/ready    # {"status":"ok"}; 503 {"detail":"dependencies unavailable: llm",...} if a dependency is down
 ```
 
 Docker's `HEALTHCHECK` polls `/health/live`, so the container is not marked unhealthy
@@ -190,7 +191,7 @@ npx @modelcontextprotocol/inspector
 }
 ```
 
-Restart Claude Desktop; the four tools appear and execute against the very same server
+Restart Claude Desktop; the five tools appear and execute against the very same server
 the internal orchestrator uses.
 
 ## Exposing this service
@@ -246,8 +247,8 @@ Three things worth knowing before the first run:
 - **`CORS_ALLOWED_ORIGINS` is empty by default**, which blocks every browser client. A
   frontend needs its origin listed there before it can call in.
 - **The `OPS_CORE_API_KEY` placeholder `change-me-min-16-chars` is shared by all five
-  services in the portfolio** and is rotated in all five at once, so a plain
-  `cp .env.example .env` still gives a working demo.
+  services in the portfolio** and is rotated in all five at once, so it matches every
+  sibling's `.env.example`. You still set `LLM_API_KEY` yourself.
 
 ---
 
@@ -267,12 +268,13 @@ Three things worth knowing before the first run:
 
 ## Что делает
 
-Четыре MCP-инструмента, каждый — тонкая обёртка над сервисом, который обращается к
+Пять MCP-инструментов, каждый — тонкая обёртка над сервисом, который обращается к
 `ops-core-api` через интерфейс:
 
 | Инструмент | Что делает |
 |------------|------------|
 | `check_calendar_availability(date, time, resource_type)` | Свободен ли слот? Возвращает совпадение/доступность/вместимость и другие свободные времена в этот день. |
+| `list_services()` | Перечисляет все услуги прайс-листа с ценой за единицу. |
 | `lookup_customer(name_or_id)` | Ищет клиентов по фрагменту имени или точному UUID. |
 | `calculate_quote(service, quantity)` | Считает стоимость услуги с объёмными скидками (деньги — точно, без float). |
 | `send_notification(recipient, message)` | **Симуляция** — логирует отправку и возвращает квитанцию; на самом деле ничего не отправляется. |
@@ -336,14 +338,14 @@ AGENT_MCP_SELF_URL=http://localhost:8003/mcp \
 ```bash
 curl -N -X POST http://localhost:8003/api/v1/invoke \
   -H "Content-Type: application/json" \
-  -d '{"message": "Свободен ли завтра столик на 18:00 и найди Анну Петрову?"}'
+  -d '{"message": "Свободен ли завтра столик на 18:00 и найди Anna Petrova?"}'
 ```
 
 Ответ — поток событий `tool_call` → `tool_result` (по одному на каждый инструмент) и
 финальное `final` со связным ответом (см. английский пример выше).
 
 Health: `/health/live` — только процесс (это и опрашивает Docker), `/health/ready` —
-оба upstream'а, 503 если хоть один недоступен.
+оба upstream'а: `{"status":"ok"}`, а если один недоступен — 503 с именем в `detail`.
 
 ## Подключение внешнего MCP-клиента к `/mcp`
 
@@ -388,4 +390,4 @@ uv run pytest --cov=src/app/services --cov-report=term-missing --cov-fail-under=
 ненадёжно, а именно надёжность вызова инструментов этот сервис и демонстрирует.
 `CORS_ALLOWED_ORIGINS` по умолчанию пуст — браузерному клиенту нужно прописать свой
 origin. Плейсхолдер `change-me-min-16-chars` в `OPS_CORE_API_KEY` общий для всех пяти
-сервисов портфолио и меняется во всех пяти сразу.
+сервисов портфолио и меняется во всех пяти сразу; `LLM_API_KEY` всё равно нужно задать самому.
