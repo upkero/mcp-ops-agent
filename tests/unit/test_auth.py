@@ -1,6 +1,7 @@
 import pytest
 
 from src.app.api.v1.dependencies.security import require_api_key
+from src.app.core.settings.llm import LLMSettings
 from src.app.core.settings.security import SecuritySettings
 from src.app.exceptions.auth import UnauthorizedError
 
@@ -24,3 +25,8 @@ def test_wrong_key_rejected() -> None:
 
 def test_correct_key_accepted() -> None:
     require_api_key(x_api_key=_KEY, settings=SecuritySettings(api_key=_KEY))
+
+
+def test_the_keys_do_not_appear_in_a_settings_repr() -> None:
+    assert _KEY not in repr(SecuritySettings(api_key=_KEY))
+    assert "sk-live-secret-value" not in repr(LLMSettings(model="m", api_key="sk-live-secret-value"))

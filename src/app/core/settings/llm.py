@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LLMProvider = Literal["openai", "openai_compatible", "ollama"]
@@ -21,7 +21,7 @@ class LLMSettings(BaseSettings):
         min_length=1,
         description="LLM model name sent to the provider.",
     )
-    api_key: str | None = Field(
+    api_key: SecretStr | None = Field(
         default=None,
         description="Provider API key. Required for provider='openai'.",
     )
@@ -75,7 +75,7 @@ class LLMSettings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_provider_requirements(self) -> "LLMSettings":
-        if self.provider == "openai" and not self.api_key:
+        if self.provider == "openai" and not (self.api_key and self.api_key.get_secret_value()):
             raise ValueError("api_key is required when provider='openai'.")
         if self.provider != "openai" and not self.base_url:
             raise ValueError(

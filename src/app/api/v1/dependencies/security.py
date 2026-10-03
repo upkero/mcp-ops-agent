@@ -18,5 +18,5 @@ def require_api_key(
     """
     if settings.api_key is None:
         return
-    if not x_api_key or not secrets.compare_digest(x_api_key, settings.api_key):
+    if not x_api_key or not secrets.compare_digest(x_api_key, settings.api_key.get_secret_value()):
         raise UnauthorizedError()

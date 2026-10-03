@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,7 +12,7 @@ class SecuritySettings(BaseSettings):
     ``X-API-Key`` header on ``POST /api/v1/invoke``.
     """
 
-    api_key: str | None = Field(
+    api_key: SecretStr | None = Field(
         default=None,
         min_length=16,
         description="If set, required as the X-API-Key header on /api/v1/invoke.",
