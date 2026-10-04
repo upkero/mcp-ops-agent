@@ -8,6 +8,7 @@ import httpx
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.agent.agent_event import AgentEvent
 from src.main import create_app
+from tests.conftest import AUTH
 
 
 class _StubOrchestrator:
@@ -23,7 +24,7 @@ async def test_a_form_body_is_a_validation_error_not_a_crash() -> None:
     container = ApplicationContainer()
     container.__dict__["orchestrator"] = _StubOrchestrator()
     transport = httpx.ASGITransport(app=create_app(container=container))
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=AUTH) as client:
         for body in (b"message=hi", b"\xff\xfe"):
             response = await client.post(
                 "/api/v1/invoke",
@@ -43,7 +44,7 @@ async def test_an_unhandled_error_is_a_500_that_still_carries_the_request_id() -
     app = create_app()
     app.add_api_route("/boom", boom)
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=AUTH) as client:
         response = await client.get("/boom", headers={"X-Request-ID": "abc-123"})
 
     assert response.status_code == 500
@@ -53,7 +54,7 @@ async def test_an_unhandled_error_is_a_500_that_still_carries_the_request_id() -
 
 async def test_a_malformed_request_id_is_replaced() -> None:
     transport = httpx.ASGITransport(app=create_app())
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=AUTH) as client:
         # Echoed, forwarded upstream and logged, so a markup or oversized id is replaced.
         for bad in ("attacker-<script>", "r" * 129):
             response = await client.get("/no-such-route", headers={"X-Request-ID": bad})

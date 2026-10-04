@@ -157,8 +157,9 @@ curl http://localhost:8003/health/ready    # {"status":"ok"}; 503 {"detail":"dep
 Docker's `HEALTHCHECK` polls `/health/live`, so the container is not marked unhealthy
 because the LLM provider is having a bad morning.
 
-**Optional auth** — leave it open for the demo, or set `SECURITY_API_KEY` (≥16 chars) to
-require `X-API-Key` on `POST /api/v1/invoke`:
+**Auth** — `POST /api/v1/invoke` requires `SECURITY_API_KEY` (≥16 chars) as `X-API-Key`.
+The service does not start without it; `.env.example` ships the portfolio's shared
+placeholder `change-me-min-16-chars`:
 
 ```bash
 curl -N -X POST http://localhost:8003/api/v1/invoke \
@@ -203,15 +204,15 @@ internet, so this is a deployment decision rather than a code one:
 
 - **`/mcp` is closed at the perimeter.** Only `POST /api/v1/invoke`, with its own
   `SECURITY_API_KEY`, faces outward.
-- **Set `SECURITY_API_KEY` before exposing anything publicly.** The per-IP rate limit
+- **Replace the placeholder `SECURITY_API_KEY` before exposing anything publicly.** The per-IP rate limit
   (`INVOKE_RATE_LIMIT_PER_MINUTE`, 20 by default) protects against abuse, not against
   cost: 20 requests a minute from one address × up to `AGENT_MAX_STEPS` LLM calls each is
   real money.
 - Compose publishes on `127.0.0.1:8003` rather than `0.0.0.0:8003` so none of the above
   can happen by accident on a machine with a public IP.
-- **Without `SECURITY_API_KEY`, `POST /api/v1/invoke` is open to anyone who can reach it**, and
-  through it so is everything the tools return: customer records including their notes. The
-  public demo runs on synthetic data; with real data, set the key first.
+- **Whoever holds `SECURITY_API_KEY` reaches everything the tools return** through
+  `POST /api/v1/invoke`: customer records including their notes. The public demo runs on
+  synthetic data; with real data, treat the key accordingly.
 - **`/mcp` is protected only by the SDK's DNS-rebinding check**: a `Host` that is not
   `localhost`/`127.0.0.1` gets `421`, a foreign `Origin` gets `403`. Behind a reverse proxy
   that forwards a public `Host`, `/mcp` therefore answers `421`; keep it internal.
@@ -247,7 +248,7 @@ All via environment (see [`.env.example`](.env.example)); grouped by prefix:
 | `LLM_` | Provider, model, key, base URL — OpenAI-compatible. |
 | `OPS_CORE_` | `ops-core-api` base URL, `X-API-Key`, timeout, total attempts. |
 | `AGENT_` | `MAX_STEPS`, `RUN_TIMEOUT_SECONDS`, `MAX_TOOL_CALLS_PER_STEP`, `MAX_NOTIFICATIONS_PER_RUN`, and `MCP_SELF_URL` (the orchestrator's loopback to `/mcp/`). |
-| `SECURITY_` | Optional `API_KEY` gating `POST /api/v1/invoke` (unset = open). |
+| `SECURITY_` | `API_KEY`, required, gating `POST /api/v1/invoke`. |
 | `CORS_` | `ALLOWED_ORIGINS`, comma-separated. |
 
 Three things worth knowing before the first run:
@@ -374,15 +375,16 @@ MCP Inspector (`npx @modelcontextprotocol/inspector`, транспорт «Strea
 
 - **`/mcp` закрывается на периметре.** Наружу смотрит только `POST /api/v1/invoke` со
   своим `SECURITY_API_KEY`.
-- **Перед публикацией наружу задайте `SECURITY_API_KEY`.** Рейт-лимит
+- **Перед публикацией наружу замените плейсхолдер `SECURITY_API_KEY`** (без ключа сервис не
+  стартует). Рейт-лимит
   (`INVOKE_RATE_LIMIT_PER_MINUTE`, по умолчанию 20) защищает от абьюза, но не от расхода:
   20 запросов в минуту с одного IP × до `AGENT_MAX_STEPS` вызовов LLM — это реальные
   деньги.
 - Compose биндит порт на `127.0.0.1`, чтобы ничего из этого не случилось случайно на
   машине с публичным IP.
-- **Без `SECURITY_API_KEY` `POST /api/v1/invoke` открыт всем, кто до него дотянется**, а вместе
-  с ним — всё, что отдают инструменты, включая заметки о клиентах. Публичное демо работает на
-  синтетических данных; с реальными данными сначала задайте ключ.
+- **У кого есть `SECURITY_API_KEY`, тому через `POST /api/v1/invoke` доступно всё**, что
+  отдают инструменты, включая заметки о клиентах. Публичное демо работает на синтетических
+  данных; с реальными данными обращайтесь с ключом соответственно.
 - **`/mcp` защищён только проверкой DNS-rebinding из SDK**: `Host`, отличный от
   `localhost`/`127.0.0.1`, получает `421`, чужой `Origin` — `403`. За реверс-прокси, который
   передаёт публичный `Host`, `/mcp` ответит `421`; держите его внутри.

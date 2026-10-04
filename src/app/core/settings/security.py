@@ -5,23 +5,26 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class SecuritySettings(BaseSettings):
-    """Optional API-key protection for the public HTTP surface.
+    """Auth settings for this service's own HTTP surface.
 
-    When ``api_key`` is unset the HTTP routes are open (convenient for a local
-    demo / connecting an MCP client). Set it in any real deployment to require an
-    ``X-API-Key`` header on ``POST /api/v1/invoke``.
+    Callers must present ``api_key`` in the ``X-API-Key`` header on
+    ``POST /api/v1/invoke``. Required (min length 16): an optional key meant a
+    renamed or forgotten variable left a paid endpoint silently open; a required
+    one fails the boot instead. The MCP endpoint ``/mcp`` is not gated by it.
     """
 
-    api_key: SecretStr | None = Field(
-        default=None,
+    api_key: SecretStr = Field(
+        ...,
         min_length=16,
-        description="If set, required as the X-API-Key header on /api/v1/invoke.",
+        description="Required as the X-API-Key header on POST /api/v1/invoke.",
     )
 
     model_config = SettingsConfigDict(
         env_prefix="SECURITY_",
         env_file=".env",
         extra="ignore",
+        # A too-short key would otherwise be echoed back in the boot-time validation error.
+        hide_input_in_errors=True,
     )
 
 

@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.agent.agent_event import AgentEvent
 from src.main import create_app
+from tests.conftest import AUTH
 
 _LIMIT = 5
 
@@ -38,7 +39,7 @@ async def _post(client: httpx.AsyncClient) -> httpx.Response:
 @pytest.fixture
 async def client() -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=_app())
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=AUTH) as client:
         yield client
 
 

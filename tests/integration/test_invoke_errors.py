@@ -14,6 +14,7 @@ from src.app.exceptions.llm import LLMGenerationError
 from src.app.gateways.agent.mcp_tool_gateway import _McpToolSession
 from src.app.mcp.v1.server import build_mcp_server
 from src.main import create_app
+from tests.conftest import AUTH
 
 
 class _FailingOrchestrator:
@@ -29,7 +30,7 @@ async def _error_frame(error: Exception) -> tuple[str, dict[str, object]]:
     container = ApplicationContainer()
     container.__dict__["orchestrator"] = _FailingOrchestrator(error)
     transport = httpx.ASGITransport(app=create_app(container=container))
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=AUTH) as client:
         response = await client.post("/api/v1/invoke", json={"message": "hi"})
     assert response.status_code == 200
     last = response.text.strip().split("\n\n")[-1]

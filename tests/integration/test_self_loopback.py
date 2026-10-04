@@ -28,6 +28,7 @@ from src.app.gateways.agent.mcp_tool_gateway import McpToolGateway
 from src.app.interfaces.ops_core.availability import AvailabilityGateway
 from src.app.interfaces.ops_core.customers import CustomerGateway
 from src.main import create_app
+from tests.conftest import AUTH
 from tests.fakes import ScriptedLLMClient
 
 
@@ -121,7 +122,7 @@ async def test_compound_request_streams_two_tool_calls_and_a_final_answer() -> N
 
     async with (
         _serve(app, port) as base_url,
-        httpx.AsyncClient(base_url=base_url, timeout=30.0) as client,
+        httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=AUTH) as client,
     ):
         response = await client.post(
             "/api/v1/invoke",
@@ -150,7 +151,7 @@ async def test_the_callers_request_id_reaches_the_tool_over_the_loopback() -> No
 
     async with (
         _serve(app, port) as base_url,
-        httpx.AsyncClient(base_url=base_url, timeout=30.0) as client,
+        httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=AUTH) as client,
     ):
         await client.post(
             "/api/v1/invoke",

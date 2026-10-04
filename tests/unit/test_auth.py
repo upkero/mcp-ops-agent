@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from src.app.api.v1.dependencies.security import require_api_key
 from src.app.core.settings.llm import LLMSettings
@@ -8,9 +9,10 @@ from src.app.exceptions.auth import UnauthorizedError
 _KEY = "k" * 16
 
 
-def test_open_when_no_key_configured() -> None:
-    # No SECURITY_API_KEY → the guard is a no-op (demo-friendly).
-    require_api_key(x_api_key=None, settings=SecuritySettings(api_key=None))
+def test_the_key_is_required() -> None:
+    # Optional, a renamed or forgotten variable left the paid endpoint open.
+    with pytest.raises(ValidationError):
+        SecuritySettings(_env_file=None, api_key=None)
 
 
 def test_missing_header_rejected_when_key_configured() -> None:

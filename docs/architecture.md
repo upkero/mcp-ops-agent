@@ -99,8 +99,8 @@ library names and upstream status lines, is logged and not forwarded.
 - `GET /health/ready` — pings both upstreams (LLM + ops-core-api via
   `OpsCoreHealthChecker`) and returns `{"status":"ok"}`, or 503 with
   `{"detail":"dependencies unavailable: llm", ...}` naming the failing dependency.
-- `POST /api/v1/invoke` is gated by an optional `X-API-Key` (`SECURITY_API_KEY`): open
-  when unset (demo friendly), required when set. It is also the one path behind a per-IP
+- `POST /api/v1/invoke` requires `X-API-Key` (`SECURITY_API_KEY`, required at boot).
+  It is also the one path behind a per-IP
   rate limit (`api/v1/middleware/rate_limit.py`), because one call to it can drive up to
   `AGENT_MAX_STEPS` LLM calls — the cap bounds spend, not just abuse.
 - `/mcp` is left to the MCP protocol's own auth story and stays open here, so the

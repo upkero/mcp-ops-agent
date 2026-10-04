@@ -4,6 +4,9 @@ import os
 # then cached. These are throwaway values so importing the container never fails
 # on a required field; the tests inject fakes for the things that matter.
 os.environ.setdefault("OPS_CORE_API_KEY", "test-ops-core-key-1234567890")
+TEST_API_KEY = "test-inbound-key-1234567890"
+os.environ.setdefault("SECURITY_API_KEY", TEST_API_KEY)
+AUTH = {"X-API-Key": TEST_API_KEY}
 os.environ.setdefault("LLM_PROVIDER", "ollama")
 os.environ.setdefault("LLM_MODEL", "stub-model")
 os.environ.setdefault("LLM_BASE_URL", "http://localhost:11434/v1")
