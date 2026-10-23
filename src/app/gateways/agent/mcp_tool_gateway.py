@@ -45,11 +45,13 @@ class _McpToolSession(ToolSession):
         # FastMCP reports a failed tool as str(exception): pydantic's multi-line
         # report with library names and doc URLs, or an upstream status line. The
         # text goes to the model AND, verbatim, to the browser, so it is replaced
-        # by a short fixed one; the original stays in the log.
-        logger.warning("agent.tool_error", extra={"tool": name, "error": raw[:500]})
-        if "validation error" in raw:
-            return json.dumps({"error": "invalid_arguments", "detail": "The arguments do not match the tool's schema."})
-        return json.dumps({"error": "tool_failed", "detail": "The tool could not complete the request."})
+        # by a short fixed one. The log gets the kind only: pydantic's report quotes
+        # each rejected argument's value (`input_value=`), a customer's name among them.
+        kind = "invalid_arguments" if "validation error" in raw else "tool_failed"
+        logger.warning("agent.tool_error", extra={"tool": name, "error": kind})
+        if kind == "invalid_arguments":
+            return json.dumps({"error": kind, "detail": "The arguments do not match the tool's schema."})
+        return json.dumps({"error": kind, "detail": "The tool could not complete the request."})
 
     @staticmethod
     def _render(result: Any) -> str:

@@ -16,11 +16,12 @@ class SimulatedNotificationChannel(NotificationChannel):
     """
 
     async def send(self, *, recipient: str, message: str) -> NotificationReceipt:
+        # The length, not the text, and no recipient: both are a customer's personal data,
+        # and the receipt below already carries them back to the caller.
         logger.info(
             "notification.simulated",
             extra={
-                "recipient": recipient,
-                "message_preview": message[:80],
+                "message_length": len(message),
                 "delivered": False,
                 "simulation": True,
             },
