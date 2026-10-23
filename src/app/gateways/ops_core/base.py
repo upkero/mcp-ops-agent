@@ -65,7 +65,9 @@ async def _fetch(
 
     # The decorator is applied here rather than at module level because `attempts`
     # is per-gateway configuration, not a constant of this module.
-    @retry_async(attempts=attempts, retry_on=_RETRYABLE)
+    # One target for every ops-core path: the path itself carries ids, and the httpx
+    # client span already says which endpoint was retried.
+    @retry_async(attempts=attempts, retry_on=_RETRYABLE, target="ops_core")
     async def _call() -> httpx.Response:
         response = await client.get(path, params=params)
         # Raise (retryable) for 5xx and 429/503; other 4xx are client problems where

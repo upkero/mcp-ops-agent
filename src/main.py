@@ -15,11 +15,13 @@ from src.app.core.logging import setup_logging
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.logging import get_logging_settings
 from src.app.core.settings.security import get_security_settings
+from src.app.core.telemetry import instrument_app, setup_metrics, setup_tracing
 from src.app.mcp.v1.server import build_mcp_server
 
 
 def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     setup_logging(get_logging_settings())
+    setup_metrics(setup_tracing("mcp-ops-agent", "mcp-ops-agent").resource)
 
     # The container is created here (not in the lifespan) because the MCP ASGI app
     # must be mounted before startup. `container` can be injected for tests.
@@ -77,6 +79,8 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     )
 
     register_exception_handlers(app)
+    # Last, so the server span is the outermost and also wraps the CORS and 429 answers.
+    instrument_app(app)
 
     app.include_router(health_router)
     app.include_router(api_router)

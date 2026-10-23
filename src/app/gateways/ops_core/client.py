@@ -1,4 +1,5 @@
 import httpx
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 from src.app.core.request_id import get_request_id
 from src.app.core.settings.ops_core import OpsCoreSettings
@@ -26,9 +27,13 @@ def create_ops_core_http_client(settings: OpsCoreSettings) -> httpx.AsyncClient:
     ops-core gateway adapter: one connection pool and one auth config for all of
     them (DRY), mirroring how ``create_llm_client`` centralises SDK construction.
     """
-    return httpx.AsyncClient(
+    client = httpx.AsyncClient(
         base_url=settings.base_url.rstrip("/"),
         headers={_API_KEY_HEADER: settings.api_key.get_secret_value()},
         timeout=settings.timeout_seconds,
         event_hooks={"request": [_inject_request_id]},
     )
+    # A client span per attempt and a `traceparent`, so ops-core-api's server span is a
+    # child of this request's trace. The X-Request-ID hook stays: logs join on it.
+    HTTPXClientInstrumentor().instrument_client(client)
+    return client
