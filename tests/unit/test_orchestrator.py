@@ -204,5 +204,6 @@ async def test_token_usage_is_summed_across_steps_and_logged(caplog: pytest.LogC
     with caplog.at_level(logging.INFO, logger="src.app.services.orchestrator"):
         [event async for event in orchestrator.run("count tokens")]
 
-    record = next(r for r in caplog.records if r.message == "agent.usage")
-    assert (record.steps, record.tokens_prompt_tokens, record.tokens_completion_tokens) == (2, 250, 30)  # type: ignore[attr-defined]
+    record = next(r for r in caplog.records if r.message == "agent.run.finished")
+    fields = (record.outcome, record.steps, record.tokens_prompt_tokens, record.tokens_completion_tokens)  # type: ignore[attr-defined]
+    assert fields == ("answered", 2, 250, 30)

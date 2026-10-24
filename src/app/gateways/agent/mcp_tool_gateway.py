@@ -7,6 +7,9 @@ from typing import Any
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import create_mcp_http_client
+from opentelemetry import propagate, trace
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.trace import SpanKind
 
 from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
 from src.app.core.request_id import get_request_id
@@ -15,6 +18,7 @@ from src.app.exceptions.agent import ToolGatewayUnavailableError
 from src.app.interfaces.agent.tool_gateway import ToolGateway, ToolSession
 
 logger = logging.getLogger(__name__)
+_tracer = trace.get_tracer(__name__)
 
 
 class _McpToolSession(ToolSession):
@@ -35,7 +39,15 @@ class _McpToolSession(ToolSession):
         ]
 
     async def call_tool(self, name: str, arguments: Mapping[str, object]) -> ToolCallOutcome:
-        result = await self._session.call_tool(name, dict(arguments))
+        with _tracer.start_as_current_span(
+            "mcp.client tools/call", kind=SpanKind.CLIENT, attributes={"mcp.method.name": "tools/call"}
+        ):
+            # The trace context rides in the request's `_meta`, not in an HTTP header: the
+            # SDK posts from a task started when the session opened, so a header would name
+            # that moment's span, not this call. The server side reads it back (mcp/v1/server.py).
+            carrier: dict[str, Any] = {}
+            propagate.inject(carrier)
+            result = await self._session.call_tool(name, dict(arguments), meta=carrier)
         if result.isError:
             return ToolCallOutcome(content=self._safe_error(name, self._render(result)), is_error=True)
         return ToolCallOutcome(content=self._render(result), is_error=False)
@@ -91,15 +103,18 @@ class McpToolGateway(ToolGateway):
 
         # Only the connect/initialise phase is wrapped — errors from the yielded
         # body (the orchestrator's own logic) must propagate unchanged.
-        async with (
-            create_mcp_http_client(headers=headers) as http_client,
-            streamable_http_client(self._url, http_client=http_client) as (read, write, _get_session_id),
-            ClientSession(read, write) as session,
-        ):
-            try:
-                await session.initialize()
-            except Exception as exc:
-                raise ToolGatewayUnavailableError(
-                    f"Failed to reach the MCP server at {self._url}."
-                ) from exc
-            yield _McpToolSession(session)
+        async with create_mcp_http_client(headers=headers) as http_client:
+            # Instrumented, so each POST /mcp of this run joins the run's trace instead of
+            # starting a trace of its own. The tool span's parent still comes from `_meta`.
+            HTTPXClientInstrumentor().instrument_client(http_client)
+            async with (
+                streamable_http_client(self._url, http_client=http_client) as (read, write, _get_session_id),
+                ClientSession(read, write) as session,
+            ):
+                try:
+                    await session.initialize()
+                except Exception as exc:
+                    raise ToolGatewayUnavailableError(
+                        f"Failed to reach the MCP server at {self._url}."
+                    ) from exc
+                yield _McpToolSession(session)
