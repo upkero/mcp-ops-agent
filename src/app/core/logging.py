@@ -70,3 +70,7 @@ def setup_logging(settings: LoggingSettings) -> None:
         uvicorn_logger = logging.getLogger(name)
         uvicorn_logger.handlers = []
         uvicorn_logger.propagate = True
+
+    # httpx logs every request line, URL included, at INFO. A customer search puts the name
+    # in that URL, so the line would carry it into the log store whatever the root level is.
+    logging.getLogger("httpx").setLevel(logging.WARNING)

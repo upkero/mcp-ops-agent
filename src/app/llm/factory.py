@@ -2,6 +2,7 @@ from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 from src.app.core.settings.llm import LLMSettings
+from src.app.core.url_redaction import strip_query_from_span
 from src.app.llm.openai_compatible_llm_client import OpenAICompatibleLLMClient
 
 
@@ -15,7 +16,7 @@ def create_llm_client(settings: LLMSettings) -> OpenAICompatibleLLMClient:
     # included, be a client span and carry a `traceparent`. The SDK still applies the
     # timeout and retry settings per request.
     http_client = DefaultAsyncHttpxClient()
-    HTTPXClientInstrumentor().instrument_client(http_client)
+    HTTPXClientInstrumentor().instrument_client(http_client, request_hook=strip_query_from_span)
     raw_client = AsyncOpenAI(
         http_client=http_client,
         api_key=settings.api_key.get_secret_value() if settings.api_key else None,
