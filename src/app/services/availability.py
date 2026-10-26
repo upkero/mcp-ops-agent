@@ -47,7 +47,7 @@ class AvailabilityService:
             other_available_times=other_available,
         )
         logger.info(
-            "booking.check_availability",
+            "availability.check",
             extra={
                 "date": result.slot_date,
                 "time": result.slot_time,
