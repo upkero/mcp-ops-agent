@@ -60,7 +60,7 @@ observable step:
 3. Step limit reached → `AgentStepLimitError`; the whole run past `AGENT_RUN_TIMEOUT_SECONDS`
    → `AgentTimeoutError`. Either way the route turns it into the terminal `error` event.
 
-The run's token usage (summed over steps) is logged once as `agent.usage`, whatever way the
+The run's token usage (summed over steps) is logged once, with the outcome, as `agent.run.finished`, whatever way the
 run ended.
 
 The `api/v1/routers/invoke.py` SSE route only forwards the message and serialises each

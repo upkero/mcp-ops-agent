@@ -130,7 +130,7 @@ MCP Inspector (`npx @modelcontextprotocol/inspector`, транспорт «Strea
 - **Что ограничивает один запуск:** `AGENT_MAX_STEPS`, `AGENT_RUN_TIMEOUT_SECONDS` (60), не
   больше `AGENT_MAX_TOOL_CALLS_PER_STEP` (4) вызовов инструментов за ход LLM,
   `AGENT_MAX_NOTIFICATIONS_PER_RUN` (3) и `LLM_MAX_TOKENS` (1024) на ход. Израсходованные
-  токены пишутся в лог как `agent.usage`.
+  токены пишутся в лог как `agent.run.finished`.
 - **Один бакет рейт-лимита на адрес источника.** За прокси или мостом сайта все посетители
   приходят с одного адреса и делят 20 в минуту; лимитируйте по посетителю там.
 

@@ -224,7 +224,7 @@ internet, so this is a deployment decision rather than a code one:
   that forwards a public `Host`, `/mcp` therefore answers `421`; keep it internal.
 - **What bounds one run:** `AGENT_MAX_STEPS`, `AGENT_RUN_TIMEOUT_SECONDS` (60), at most
   `AGENT_MAX_TOOL_CALLS_PER_STEP` (4) tool calls per LLM turn, `AGENT_MAX_NOTIFICATIONS_PER_RUN`
-  (3) and `LLM_MAX_TOKENS` (1024) per turn. The tokens a run used are logged as `agent.usage`.
+  (3) and `LLM_MAX_TOKENS` (1024) per turn. The tokens a run used are logged as `agent.run.finished`.
 - **One rate-limit bucket per source address.** Behind a proxy or a site bridge every visitor
   arrives from the same address and shares the 20 a minute; limit per visitor there.
 
