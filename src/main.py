@@ -29,7 +29,8 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
 
     # Build the MCP server from the SAME container the HTTP layer uses, so tools
     # and services share one set of dependencies. Its Streamable HTTP ASGI app is
-    # mounted at /mcp; streamable_http_path="/" keeps the endpoint exactly /mcp.
+    # mounted at /mcp; streamable_http_path="/" makes the endpoint /mcp/ (a request to plain
+    # /mcp is answered with a 307 to it).
     mcp_server = build_mcp_server(container)
     mcp_app = mcp_server.streamable_http_app()
 

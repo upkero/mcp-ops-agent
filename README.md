@@ -6,6 +6,9 @@
 
 *[Русская версия](README.ru.md)*
 
+**Live demo:** [upkero.com](https://upkero.com). The agent there runs `anthropic/claude-haiku-5.5`
+through OpenRouter and reads synthetic data from `ops-core-api`.
+
 A **real [Model Context Protocol](https://modelcontextprotocol.io) server** (built on
 FastMCP from the official MCP Python SDK) for an operations desk, plus a
 self-consuming **agentic orchestrator** that reaches those tools the same way any
@@ -44,7 +47,7 @@ flowchart LR
   CD["Claude Desktop /<br/>MCP Inspector"] -- "MCP over<br/>Streamable HTTP" --> MCP
   BR["Browser<br/>(portfolio UI)"] -- "SSE" --> API["POST /api/v1/invoke"]
   API --> ORC["Orchestrator<br/>(LLM + MCP client)"]
-  ORC -- "MCP over<br/>Streamable HTTP (self-loopback)" --> MCP["FastMCP server<br/>/mcp"]
+  ORC -- "MCP over<br/>Streamable HTTP (self-loopback)" --> MCP["FastMCP server<br/>/mcp/"]
   MCP --> TOOLS["mcp/v1/tools"]
   TOOLS --> SVC["services"]
   SVC --> GW["ops-core gateways"]
@@ -52,15 +55,15 @@ flowchart LR
 ```
 
 1. **External MCP client** (Claude Desktop, MCP Inspector, …) connects straight to
-   `/mcp` over Streamable HTTP and drives the tools by hand.
-2. **Internal orchestrator** is itself an MCP *client* to the same `/mcp`: an LLM loop
+   `/mcp/` over Streamable HTTP and drives the tools by hand.
+2. **Internal orchestrator** is itself an MCP *client* to the same `/mcp/`: an LLM loop
    that lists the tools, calls them over the protocol, and streams each step.
 3. **`POST /api/v1/invoke`** is a thin HTTP route over the orchestrator. It streams
    the agent's steps to the browser as **Server-Sent Events** — you watch the agent
    decide, call a tool, read the result, and answer — without ever putting the LLM key
    or an MCP client in the browser.
 
-Because the orchestrator connects to the server's *own* mounted `/mcp` over real HTTP,
+Because the orchestrator connects to the server's *own* mounted `/mcp/` over real HTTP,
 there is no code path that invokes a tool outside the MCP protocol.
 
 ## Architecture
@@ -128,11 +131,13 @@ AGENT_MCP_SELF_URL=http://localhost:8003/mcp/ \
 
 ## Try it
 
-**Composite request over SSE** (`-N` disables curl buffering so you see events arrive):
+**Composite request over SSE** (`-N` disables curl buffering so you see events arrive).
+`POST /api/v1/invoke` needs the `X-API-Key` header; set `SECURITY_API_KEY` to the value in
+your `.env` (see **Auth** below), or the call answers `401 invalid_api_key`:
 
 ```bash
 curl -N -X POST http://localhost:8003/api/v1/invoke \
-  -H "Content-Type: application/json" \
+  -H "X-API-Key: $SECURITY_API_KEY" -H "Content-Type: application/json" \
   -d '{"message": "Is the 18:00 table free tomorrow, and can you look up Anna Petrova?"}'
 ```
 
@@ -173,16 +178,17 @@ curl -N -X POST http://localhost:8003/api/v1/invoke \
   -d '{"message":"..."}'
 ```
 
-## Connect an external MCP client to `/mcp`
+## Connect an external MCP client to `/mcp/`
 
 Run the service locally and point your MCP client at **your own localhost** — that is the
-intended shape, not a hosted URL.
+intended shape, not a hosted URL. Use the URL **with the trailing slash**: the endpoint is
+`/mcp/`, and a request to `/mcp` is answered with a `307` redirect that not every client follows.
 
 **MCP Inspector** (quickest way to see tools and call them live):
 
 ```bash
 npx @modelcontextprotocol/inspector
-# In the UI: Transport = "Streamable HTTP", URL = http://localhost:8003/mcp → Connect
+# In the UI: Transport = "Streamable HTTP", URL = http://localhost:8003/mcp/ → Connect
 ```
 
 **Claude Desktop** — bridge stdio to your local endpoint via `mcp-remote` in
@@ -193,7 +199,7 @@ npx @modelcontextprotocol/inspector
   "mcpServers": {
     "ops-agent": {
       "command": "npx",
-      "args": ["mcp-remote", "http://localhost:8003/mcp"]
+      "args": ["mcp-remote", "http://localhost:8003/mcp/"]
     }
   }
 }
@@ -201,6 +207,18 @@ npx @modelcontextprotocol/inspector
 
 Restart Claude Desktop; the five tools appear and execute against the very same server
 the internal orchestrator uses.
+
+## Observability
+
+- **Traces:** OpenTelemetry spans for each request, ops-core call and LLM completion. The trace
+  continues across the MCP self-loopback through the request's `_meta`, so a tool's span is a child of the agent run that called it.
+- **Metrics:** `agent.runs` by outcome, `agent.run.duration`, `agent.iterations`, `agent.refusals`,
+  `mcp.tool.calls` and `mcp.tool.duration`, the `gen_ai.client.*` LLM histograms and `llm.cost` in USD.
+- **Export:** set `OTEL_EXPORTER_OTLP_ENDPOINT`; unset, spans are still created and nothing leaves the process.
+- **Logs:** JSON lines carry `trace_id` and `span_id`; each run ends with one `agent.run.finished` line
+  (outcome, steps, tokens). Customer names reach neither logs nor spans: the query string is stripped from span URLs.
+- **Dashboards:** Grafana overview, LLM cost and per-service boards in
+  [`portfolio-deploy`](https://github.com/upkero/portfolio-deploy).
 
 ## Exposing this service
 
@@ -224,7 +242,7 @@ internet, so this is a deployment decision rather than a code one:
   that forwards a public `Host`, `/mcp` therefore answers `421`; keep it internal.
 - **What bounds one run:** `AGENT_MAX_STEPS`, `AGENT_RUN_TIMEOUT_SECONDS` (60), at most
   `AGENT_MAX_TOOL_CALLS_PER_STEP` (4) tool calls per LLM turn, `AGENT_MAX_NOTIFICATIONS_PER_RUN`
-  (3) and `LLM_MAX_TOKENS` (1024) per turn. The tokens a run used are logged as `agent.usage`.
+  (3) and `LLM_MAX_TOKENS` (1024) per turn. The tokens a run used are logged as `agent.run.finished`.
 - **One rate-limit bucket per source address.** Behind a proxy or a site bridge every visitor
   arrives from the same address and shares the 20 a minute; limit per visitor there.
 
@@ -241,7 +259,7 @@ tool-argument validation, the orchestrator loop (scripted LLM + fake gateway), a
 in-memory MCP round-trip, and — the headline — a **hermetic real-loopback test**
 (`tests/integration/test_self_loopback.py`) that boots the whole app on a loopback port
 and asserts a compound request streams two sequential `tool_call` events then a final
-answer, with the orchestrator self-calling the mounted `/mcp` over genuine Streamable
+answer, with the orchestrator self-calling the mounted `/mcp/` over genuine Streamable
 HTTP. No live LLM or `ops-core-api` is required — both are mocked.
 
 ## Configuration

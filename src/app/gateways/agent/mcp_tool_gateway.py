@@ -14,6 +14,7 @@ from opentelemetry.trace import SpanKind
 from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
 from src.app.core.request_id import get_request_id
 from src.app.core.settings.agent import AgentSettings
+from src.app.core.url_redaction import strip_query_from_span
 from src.app.exceptions.agent import ToolGatewayUnavailableError
 from src.app.interfaces.agent.tool_gateway import ToolGateway, ToolSession
 
@@ -106,7 +107,7 @@ class McpToolGateway(ToolGateway):
         async with create_mcp_http_client(headers=headers) as http_client:
             # Instrumented, so each POST /mcp of this run joins the run's trace instead of
             # starting a trace of its own. The tool span's parent still comes from `_meta`.
-            HTTPXClientInstrumentor().instrument_client(http_client)
+            HTTPXClientInstrumentor().instrument_client(http_client, request_hook=strip_query_from_span)
             async with (
                 streamable_http_client(self._url, http_client=http_client) as (read, write, _get_session_id),
                 ClientSession(read, write) as session,

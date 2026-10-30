@@ -12,7 +12,7 @@ from src.app.contracts.ops_core.enums import ResourceType
 
 
 def register(mcp: FastMCP, container: ApplicationContainer) -> None:
-    """Register booking tools on the MCP server (mirrors including an API sub-router)."""
+    """Register the availability tool on the MCP server (mirrors including an API sub-router)."""
 
     # The description is what the model reads on every step, so it is passed explicitly
     # rather than taken from the docstring (which is for developers). FastMCP derives

@@ -10,7 +10,7 @@ from opentelemetry.trace import Link, SpanKind
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core import metrics
-from src.app.mcp.v1.tools import booking, customers, notifications, pricing
+from src.app.mcp.v1.tools import availability, customers, notifications, pricing
 
 _tracer = trace.get_tracer(__name__)
 
@@ -70,10 +70,11 @@ def build_mcp_server(container: ApplicationContainer) -> FastMCP:
 
     ``stateless_http=True`` keeps each request self-contained (simplest for the
     self-loopback client); ``streamable_http_path="/"`` makes the mounted endpoint
-    resolve to exactly ``/mcp`` (see ``main.create_app``).
+    resolve to ``/mcp/`` once mounted at ``/mcp``: a request to plain ``/mcp`` is answered
+    with a 307 to it (see ``main.create_app``).
     """
     mcp = _TracedFastMCP("ops-agent", stateless_http=True, streamable_http_path="/")
-    booking.register(mcp, container)
+    availability.register(mcp, container)
     customers.register(mcp, container)
     pricing.register(mcp, container)
     notifications.register(mcp, container)

@@ -2,6 +2,9 @@
 
 *[English version](README.md)*
 
+**Живое демо:** [upkero.com](https://upkero.com). Агент там работает на `anthropic/claude-haiku-5.5`
+через OpenRouter и читает синтетические данные из `ops-core-api`.
+
 Настоящий **MCP-сервер** ([Model Context Protocol](https://modelcontextprotocol.io),
 на FastMCP из официального MCP Python SDK) для операционного пульта и
 **внутренний агент-оркестратор**, который обращается к тем же инструментам так же, как
@@ -33,16 +36,16 @@
 
 ## Два потребителя, один сервер
 
-1. **Внешний MCP-клиент** (Claude Desktop, MCP Inspector) подключается прямо к `/mcp`
+1. **Внешний MCP-клиент** (Claude Desktop, MCP Inspector) подключается прямо к `/mcp/`
    по Streamable HTTP и вызывает инструменты вручную.
-2. **Внутренний оркестратор** сам является MCP-*клиентом* к тому же `/mcp`: LLM-цикл,
+2. **Внутренний оркестратор** сам является MCP-*клиентом* к тому же `/mcp/`: LLM-цикл,
    который получает список инструментов, вызывает их через протокол и стримит каждый шаг.
 3. **`POST /api/v1/invoke`** — тонкий HTTP-роутер поверх оркестратора. Стримит шаги
    агента в браузер как **Server-Sent Events**: видно, как агент решает, вызывает
    инструмент, читает результат и отвечает — без переноса LLM-ключа или MCP-клиента в
    браузер.
 
-Поскольку оркестратор подключается к *собственному* смонтированному `/mcp` по настоящему
+Поскольку оркестратор подключается к *собственному* смонтированному `/mcp/` по настоящему
 HTTP, не существует пути, которым инструмент вызывался бы в обход MCP-протокола.
 
 ## Архитектура
@@ -85,11 +88,12 @@ AGENT_MCP_SELF_URL=http://localhost:8003/mcp/ \
 
 ## Примеры
 
-Составной запрос через SSE:
+Составной запрос через SSE. `POST /api/v1/invoke` требует заголовок `X-API-Key`: задайте
+`SECURITY_API_KEY` значением из вашего `.env`, иначе ответ — `401 invalid_api_key`:
 
 ```bash
 curl -N -X POST http://localhost:8003/api/v1/invoke \
-  -H "Content-Type: application/json" \
+  -H "X-API-Key: $SECURITY_API_KEY" -H "Content-Type: application/json" \
   -d '{"message": "Свободен ли завтра столик на 18:00 и найди Anna Petrova?"}'
 ```
 
@@ -99,12 +103,30 @@ curl -N -X POST http://localhost:8003/api/v1/invoke \
 Health: `/health/live` — только процесс (это и опрашивает Docker), `/health/ready` —
 оба upstream'а: `{"status":"ok"}`, а если один недоступен — 503 с именем в `detail`.
 
-## Подключение внешнего MCP-клиента к `/mcp`
+## Подключение внешнего MCP-клиента к `/mcp/`
 
-Поднимите сервис локально и подключайте клиент к **своему localhost**. Быстрее всего —
-MCP Inspector (`npx @modelcontextprotocol/inspector`, транспорт «Streamable HTTP», URL
-`http://localhost:8003/mcp`). Для Claude Desktop используйте мост `mcp-remote`
-в `claude_desktop_config.json` (см. английскую версию).
+Поднимите сервис локально и подключайте клиент к **своему localhost**, а адрес берите
+**со слэшем на конце**: эндпоинт — `/mcp/`, а запрос к `/mcp` получает редирект `307`,
+который идут не все клиенты. Быстрее всего — MCP Inspector
+(`npx @modelcontextprotocol/inspector`, транспорт «Streamable HTTP», URL
+`http://localhost:8003/mcp/`). Для Claude Desktop используйте мост `mcp-remote`
+в `claude_desktop_config.json`, с аргументом `http://localhost:8003/mcp/`
+(см. [английскую версию](README.md#connect-an-external-mcp-client-to-mcp)).
+
+## Наблюдаемость
+
+- **Трейсы:** спаны OpenTelemetry на каждый запрос, вызов ops-core и ответ LLM. Трейс
+  продолжается через MCP self-loopback в `_meta` запроса, так что спан инструмента —
+  потомок запуска агента, который его вызвал.
+- **Метрики:** `agent.runs` по исходу, `agent.run.duration`, `agent.iterations`,
+  `agent.refusals`, `mcp.tool.calls` и `mcp.tool.duration`, гистограммы LLM `gen_ai.client.*`
+  и `llm.cost` в USD.
+- **Экспорт:** задайте `OTEL_EXPORTER_OTLP_ENDPOINT`; без него спаны создаются, но никуда не уходят.
+- **Логи:** JSON-строки несут `trace_id` и `span_id`; каждый запуск заканчивается одной строкой
+  `agent.run.finished` (исход, шаги, токены). Имена клиентов не попадают ни в логи, ни в спаны:
+  из URL спанов вырезается query-строка.
+- **Дашборды:** обзорный, стоимости LLM и по сервисам, Grafana, в
+  [`portfolio-deploy`](https://github.com/upkero/portfolio-deploy).
 
 ## Публикация наружу
 
@@ -130,7 +152,7 @@ MCP Inspector (`npx @modelcontextprotocol/inspector`, транспорт «Strea
 - **Что ограничивает один запуск:** `AGENT_MAX_STEPS`, `AGENT_RUN_TIMEOUT_SECONDS` (60), не
   больше `AGENT_MAX_TOOL_CALLS_PER_STEP` (4) вызовов инструментов за ход LLM,
   `AGENT_MAX_NOTIFICATIONS_PER_RUN` (3) и `LLM_MAX_TOKENS` (1024) на ход. Израсходованные
-  токены пишутся в лог как `agent.usage`.
+  токены пишутся в лог как `agent.run.finished`.
 - **Один бакет рейт-лимита на адрес источника.** За прокси или мостом сайта все посетители
   приходят с одного адреса и делят 20 в минуту; лимитируйте по посетителю там.
 
@@ -145,7 +167,7 @@ uv run pytest --cov=src/app/services --cov-report=term-missing --cov-fail-under=
 Ключевой тест — герметичный self-loopback (`tests/integration/test_self_loopback.py`):
 поднимает всё приложение на loopback-порту и проверяет, что составной запрос стримит два
 последовательных события `tool_call` и финальный ответ, причём оркестратор реально
-дергает смонтированный `/mcp` по Streamable HTTP. Живые LLM и `ops-core-api` не нужны —
+дергает смонтированный `/mcp/` по Streamable HTTP. Живые LLM и `ops-core-api` не нужны —
 оба замоканы.
 
 ## Конфигурация
