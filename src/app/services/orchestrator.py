@@ -50,9 +50,11 @@ def _today_label(now: datetime) -> str:
 
 @dataclass
 class _RunState:
-    """What one run has spent so far, and when it must be over."""
+    """One run: where its events go, its conversation, what it has spent, and when it must be over."""
 
     deadline: float
+    emit: Callable[[AgentEvent], None]
+    messages: list[LLMMessage] = field(default_factory=list)
     steps: int = 0
     notifications: int = 0
     tool_calls: int = 0
@@ -73,8 +75,12 @@ async def _before_deadline[T](state: _RunState, awaitable: Awaitable[T]) -> T:
         raise
 
 
-def _refused(reason: str) -> ToolCallOutcome:
-    return ToolCallOutcome(content=json.dumps({"status": "refused", "error": reason}), is_error=True)
+def _refuse(state: _RunState, reason: str, limit: int, error: str) -> ToolCallOutcome:
+    """Answer a call with a refusal, and log and count it under ``reason``."""
+    logger.warning("agent.tool_refused", extra={"reason": reason, "limit": limit})
+    state.refusals += 1
+    metrics.agent_refusals.add(1, {"reason": reason})
+    return ToolCallOutcome(content=json.dumps({"status": "refused", "error": error}), is_error=True)
 
 
 class OrchestratorService:
@@ -120,7 +126,7 @@ class OrchestratorService:
             task.cancel()
 
     async def _run(self, user_message: str, emit: Callable[[AgentEvent], None]) -> None:
-        state = _RunState(deadline=asyncio.get_running_loop().time() + self._settings.run_timeout_seconds)
+        state = _RunState(deadline=asyncio.get_running_loop().time() + self._settings.run_timeout_seconds, emit=emit)
         started = time.perf_counter()
         outcome = "answered"
         with _tracer.start_as_current_span(
@@ -132,20 +138,20 @@ class OrchestratorService:
             },
         ) as span:
             try:
-                await self._loop(user_message, emit, state)
+                await self._loop(user_message, state)
             except BaseException as exc:
                 outcome = next((name for kind, name in _OUTCOMES if isinstance(exc, kind)), "error")
                 raise
             finally:
                 self._finish(span, state, outcome, time.perf_counter() - started)
 
-    async def _loop(self, user_message: str, emit: Callable[[AgentEvent], None], state: _RunState) -> None:
+    async def _loop(self, user_message: str, state: _RunState) -> None:
         # One MCP session per run (reused across every turn below), then closed.
         async with self._gateway.open_session() as session:
             definitions = await _before_deadline(state, session.list_tools())
             state.tool_names = frozenset(tool.name for tool in definitions)
             tools = [self._to_openai_tool(tool) for tool in definitions]
-            # NOTE: the conversation is a local list that lives for one run and is
+            # NOTE: the conversation is a list that lives for one run and is
             # dropped with it. There is no store, and the MCP server is stateless_http,
             # so a session per run is all there is to keep. The ceiling: the agent has
             # no memory between requests, so a follow-up like "and the day after?"
@@ -154,22 +160,22 @@ class OrchestratorService:
             # shape: a ConversationRepository port, in-memory now and Postgres later,
             # with this list loaded from it instead of built fresh. Nothing else here
             # changes.
-            messages: list[LLMMessage] = [
+            state.messages += [
                 LLMMessage(role="system", content=_PROMPT.render(today=_today_label(datetime.now().astimezone()))),
                 LLMMessage(role="user", content=user_message),
             ]
 
             for step in range(1, self._settings.max_steps + 1):
                 state.steps = step
-                response = await _before_deadline(state, self._llm.complete(messages, tools=tools))
+                response = await _before_deadline(state, self._llm.complete(state.messages, tools=tools))
                 state.tokens.update(response.usage or {})
 
                 if not response.tool_calls:
-                    emit(AgentEvent(type="final", data={"content": response.content}))
+                    state.emit(AgentEvent(type="final", data={"content": response.content}))
                     return
 
                 # Record the assistant turn (with its tool calls) before running them.
-                messages.append(
+                state.messages.append(
                     LLMMessage(
                         role="assistant",
                         content=response.content,
@@ -177,7 +183,7 @@ class OrchestratorService:
                     )
                 )
                 for index, call in enumerate(response.tool_calls):
-                    await self._invoke_tool(session, messages, call, state, emit, index=index)
+                    await self._invoke_tool(session, call, state, index=index)
 
             logger.warning("agent.max_steps", extra={"max_steps": self._settings.max_steps})
             raise AgentStepLimitError()
@@ -216,26 +222,12 @@ class OrchestratorService:
             },
         )
 
-    async def _invoke_tool(
-        self,
-        session: ToolSession,
-        messages: list[LLMMessage],
-        call: ToolCall,
-        state: _RunState,
-        emit: Callable[[AgentEvent], None],
-        *,
-        index: int,
-    ) -> None:
+    async def _invoke_tool(self, session: ToolSession, call: ToolCall, state: _RunState, *, index: int) -> None:
         arguments = self._parse_arguments(call.arguments)
-        emit(
-            AgentEvent(
-                type="tool_call",
-                data={"id": call.id, "name": call.name, "arguments": arguments},
-            )
-        )
+        state.emit(AgentEvent(type="tool_call", data={"id": call.id, "name": call.name, "arguments": arguments}))
 
-        outcome = await self._execute(session, call, arguments, state, index=index)
-        emit(
+        outcome = self._refusal(call, state, index=index) or await self._execute(session, call, arguments, state)
+        state.emit(
             AgentEvent(
                 type="tool_result",
                 data={
@@ -247,36 +239,31 @@ class OrchestratorService:
             )
         )
         # Feed the result back so the model can reason over it on the next turn.
-        messages.append(LLMMessage(role="tool", content=outcome.content, tool_call_id=call.id))
+        state.messages.append(LLMMessage(role="tool", content=outcome.content, tool_call_id=call.id))
 
-    async def _execute(
-        self,
-        session: ToolSession,
-        call: ToolCall,
-        arguments: Mapping[str, object],
-        state: _RunState,
-        *,
-        index: int,
-    ) -> ToolCallOutcome:
+    def _refusal(self, call: ToolCall, state: _RunState, *, index: int) -> ToolCallOutcome | None:
         # Every call the model asked for still gets an answer (the provider rejects a
         # tool call with no result), but past a budget the answer is a refusal that
         # never reaches the tool — so a prompt-injected "message every customer" or a
         # fan-out of fifty lookups cannot turn into that many real calls.
         limit = self._settings.max_tool_calls_per_step
         if index >= limit:
-            logger.warning("agent.tool_call_limit", extra={"limit": limit})
-            state.refusals += 1
-            metrics.agent_refusals.add(1, {"reason": "step_tool_limit"})
-            return _refused(f"at most {limit} tool calls per step; ask for the rest in a later step")
+            return _refuse(
+                state,
+                "step_tool_limit",
+                limit,
+                f"at most {limit} tool calls per step; ask for the rest in a later step",
+            )
         if call.name == _NOTIFY_TOOL:
             state.notifications += 1
-            if state.notifications > self._settings.max_notifications_per_run:
-                logger.warning("agent.notification_limit", extra={"limit": self._settings.max_notifications_per_run})
-                state.refusals += 1
-                metrics.agent_refusals.add(1, {"reason": "notification_limit"})
-                return _refused(
-                    f"notification limit of {self._settings.max_notifications_per_run} per request reached"
-                )
+            limit = self._settings.max_notifications_per_run
+            if state.notifications > limit:
+                return _refuse(state, "notification_limit", limit, f"notification limit of {limit} per request reached")
+        return None
+
+    async def _execute(
+        self, session: ToolSession, call: ToolCall, arguments: Mapping[str, object], state: _RunState
+    ) -> ToolCallOutcome:
         state.tool_calls += 1
         # The model can name any tool; the label only takes the ones the server advertised.
         tool = call.name if call.name in state.tool_names else "unknown"
