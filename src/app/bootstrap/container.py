@@ -1,4 +1,3 @@
-import inspect
 from functools import cached_property
 
 import httpx
@@ -104,19 +103,12 @@ class ApplicationContainer:
         )
 
     async def close(self) -> None:
-        # Generic teardown: close every instantiated dependency exposing close(),
-        # de-duplicated by identity (services share client instances).
-        closed_dependency_ids: set[int] = set()
+        # Close every dependency that was built and has a close(). The services
+        # hold the same clients but have no close() of their own.
         for dependency in tuple(self.__dict__.values()):
-            dependency_id = id(dependency)
-            if dependency_id in closed_dependency_ids:
-                continue
             close = getattr(dependency, "close", None)
             if callable(close):
-                result = close()
-                if inspect.isawaitable(result):
-                    await result
-            closed_dependency_ids.add(dependency_id)
+                await close()
 
         # httpx.AsyncClient exposes aclose(), not close(), so dispose it explicitly.
         if "_ops_core_client" in self.__dict__:
