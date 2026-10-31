@@ -71,3 +71,15 @@ async def test_exceeding_the_budget_returns_the_error_envelope_with_retry_after(
 async def test_health_is_not_rate_limited(client: httpx.AsyncClient) -> None:
     for _ in range(_LIMIT + 2):
         assert (await client.get("/health/live")).status_code == 200
+
+
+async def test_a_get_on_invoke_is_a_405_and_spends_no_quota(client: httpx.AsyncClient) -> None:
+    for _ in range(_LIMIT + 2):
+        response = await client.get("/api/v1/invoke")
+        assert response.status_code == 405
+        assert "X-RateLimit-Remaining" not in response.headers
+
+    response = await _post(client)
+
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Remaining"] == str(_LIMIT - 1)
