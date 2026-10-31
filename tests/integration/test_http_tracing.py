@@ -1,4 +1,4 @@
-"""The HTTP server spans and metrics under FastAPI 0.139 (CANON C19).
+"""The HTTP server spans and metrics under FastAPI 0.139.
 
 `instrument_app` replaces a private function of opentelemetry-instrumentation-fastapi 0.60b1,
 which cannot read this FastAPI's nested routers. These cases fail if that patch is dropped
