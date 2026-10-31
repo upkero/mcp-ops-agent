@@ -9,7 +9,7 @@ process (CI-friendly).
 
 import asyncio
 import socket
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from src.app.bootstrap.container import ApplicationContainer
+from src.app.contracts.agent.tool_catalog import ToolDefinition
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.tool_call import ToolCall
@@ -208,7 +209,7 @@ class _StallingLLMClient(ScriptedLLMClient):
     """Asks for one tool, then never answers: the run is in flight when the client leaves."""
 
     async def complete(
-        self, messages: Sequence[LLMMessage], *, tools: Sequence[Mapping[str, object]] | None = None
+        self, messages: Sequence[LLMMessage], *, tools: Sequence[ToolDefinition] | None = None
     ) -> LLMResponse:
         if self.calls:
             await asyncio.sleep(60)

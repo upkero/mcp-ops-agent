@@ -6,9 +6,9 @@ from dataclasses import dataclass
 class ToolDefinition:
     """A tool advertised by the MCP server (name + description + JSON Schema).
 
-    The orchestrator converts these into the provider's function-calling format;
-    keeping them as a framework-free contract means the orchestrator never imports
-    the MCP SDK types directly.
+    The LLM client converts these into the provider's function-calling format;
+    keeping them as a framework-free contract means neither the orchestrator nor
+    the client imports the MCP SDK types.
     """
 
     name: str

@@ -38,7 +38,7 @@ class ScriptedLLMClient(LLMClient):
         self,
         messages: Sequence[LLMMessage],
         *,
-        tools: Sequence[Mapping[str, object]] | None = None,
+        tools: Sequence[ToolDefinition] | None = None,
     ) -> LLMResponse:
         self.calls.append((list(messages), tools))
         if len(self._responses) > 1:

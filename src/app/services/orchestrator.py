@@ -11,7 +11,7 @@ from opentelemetry import trace
 from opentelemetry.trace import Span
 
 from src.app.contracts.agent.agent_event import AgentEvent
-from src.app.contracts.agent.tool_catalog import ToolCallOutcome, ToolDefinition
+from src.app.contracts.agent.tool_catalog import ToolCallOutcome
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.tool_call import ToolCall
 from src.app.core import metrics
@@ -150,7 +150,6 @@ class OrchestratorService:
         async with self._gateway.open_session() as session:
             definitions = await _before_deadline(state, session.list_tools())
             state.tool_names = frozenset(tool.name for tool in definitions)
-            tools = [self._to_openai_tool(tool) for tool in definitions]
             # NOTE: the conversation is a list that lives for one run and is
             # dropped with it. There is no store, and the MCP server is stateless_http,
             # so a session per run is all there is to keep. The ceiling: the agent has
@@ -167,7 +166,7 @@ class OrchestratorService:
 
             for step in range(1, self._settings.max_steps + 1):
                 state.steps = step
-                response = await _before_deadline(state, self._llm.complete(state.messages, tools=tools))
+                response = await _before_deadline(state, self._llm.complete(state.messages, tools=definitions))
                 state.tokens.update(response.usage or {})
 
                 if not response.tool_calls:
@@ -296,17 +295,3 @@ class OrchestratorService:
         except json.JSONDecodeError:
             return {}
         return parsed if isinstance(parsed, dict) else {}
-
-    @staticmethod
-    def _to_openai_tool(tool: ToolDefinition) -> Mapping[str, object]:
-        # MCP tool definition -> provider function-calling schema. The MCP
-        # JSON Schema is passed through verbatim, so the tool is described exactly
-        # once (on the server) and never re-declared here.
-        return {
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.input_schema,
-            },
-        }

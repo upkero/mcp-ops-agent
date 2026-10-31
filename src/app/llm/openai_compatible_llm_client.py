@@ -8,6 +8,7 @@ from openai import OpenAIError
 from opentelemetry import trace
 from opentelemetry.trace import Span, SpanKind
 
+from src.app.contracts.agent.tool_catalog import ToolDefinition
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.tool_call import ToolCall
@@ -59,7 +60,7 @@ class OpenAICompatibleLLMClient(LLMClient):
         self,
         messages: Sequence[LLMMessage],
         *,
-        tools: Sequence[Mapping[str, object]] | None = None,
+        tools: Sequence[ToolDefinition] | None = None,
     ) -> LLMResponse:
         if not messages:
             raise LLMInputError("LLM messages must not be empty.")
@@ -124,14 +125,22 @@ class OpenAICompatibleLLMClient(LLMClient):
     def _completion_params(
         self,
         messages: Sequence[LLMMessage],
-        tools: Sequence[Mapping[str, object]] | None,
+        tools: Sequence[ToolDefinition] | None,
     ) -> dict[str, object]:
         params: dict[str, object] = {
             "model": self._settings.model,
             "messages": [self._to_wire_message(message) for message in messages],
         }
         if tools:
-            params["tools"] = list(tools)
+            # The MCP JSON Schema is passed through verbatim, so each tool is described
+            # exactly once, on the server, and never re-declared here.
+            params["tools"] = [
+                {
+                    "type": "function",
+                    "function": {"name": tool.name, "description": tool.description, "parameters": tool.input_schema},
+                }
+                for tool in tools
+            ]
             params["tool_choice"] = "auto"
         if self._settings.temperature is not None:
             params["temperature"] = self._settings.temperature

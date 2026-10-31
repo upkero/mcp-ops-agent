@@ -14,19 +14,18 @@ from openai import APIConnectionError
 from openai.types.chat import ChatCompletion
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from src.app.contracts.agent.tool_catalog import ToolDefinition
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.tool_call import ToolCall
 from src.app.core.settings.llm import LLMSettings
 from src.app.exceptions.llm import LLMGenerationError, LLMInputError
 from src.app.llm.openai_compatible_llm_client import OpenAICompatibleLLMClient
 
+_SCHEMA = {"type": "object", "properties": {"name_or_id": {"type": "string"}}}
+# What the provider must receive for the tool above: the MCP JSON Schema, untouched.
 _TOOL = {
     "type": "function",
-    "function": {
-        "name": "lookup_customer",
-        "description": "Look up customers.",
-        "parameters": {"type": "object", "properties": {"name_or_id": {"type": "string"}}},
-    },
+    "function": {"name": "lookup_customer", "description": "Look up customers.", "parameters": _SCHEMA},
 }
 _USER = [LLMMessage(role="system", content="be brief"), LLMMessage(role="user", content="hi")]
 
@@ -112,7 +111,7 @@ async def test_a_tool_call_reply_is_parsed_and_the_tools_go_out_with_auto_choice
         )
     )
 
-    response = await client.complete(_USER, tools=[_TOOL])
+    response = await client.complete(_USER, tools=[ToolDefinition("lookup_customer", "Look up customers.", _SCHEMA)])
 
     assert response.content == ""
     assert response.tool_calls == (ToolCall("call_1", "lookup_customer", '{"name_or_id": "Anna"}'),)

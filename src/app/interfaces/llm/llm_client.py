@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
+from src.app.contracts.agent.tool_catalog import ToolDefinition
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_response import LLMResponse
 
@@ -8,7 +9,8 @@ from src.app.contracts.llm.llm_response import LLMResponse
 class LLMClient(ABC):
     """Abstraction over a chat-completion LLM with optional tool-calling.
 
-    ``tools`` (when given) are provider-format function schemas; the returned
+    ``tools`` (when given) are the MCP server's tool definitions; the client turns
+    them into its provider's function-calling format. The returned
     LLMResponse carries ``tool_calls`` when the model chooses to use one. Services
     depend on this interface, never on the concrete SDK client.
     """
@@ -26,7 +28,7 @@ class LLMClient(ABC):
         self,
         messages: Sequence[LLMMessage],
         *,
-        tools: Sequence[Mapping[str, object]] | None = None,
+        tools: Sequence[ToolDefinition] | None = None,
     ) -> LLMResponse: ...
 
     @abstractmethod

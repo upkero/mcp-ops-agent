@@ -49,8 +49,9 @@ self-loopback: uvicorn finishes lifespan startup before it accepts connections.)
 `OrchestratorService.run(message)` runs the loop and yields an `AgentEvent` per
 observable step:
 
-1. Open one MCP session; `list_tools()` → convert each to the provider's function-calling
-   schema (the MCP JSON Schema is passed through verbatim — the tool is described once).
+1. Open one MCP session; `list_tools()` → hand the definitions to the LLM client, which
+   converts each to the provider's function-calling schema (the MCP JSON Schema is passed
+   through verbatim — the tool is described once).
 2. Loop up to `AGENT_MAX_STEPS`: `llm.complete(messages, tools=…)`.
    - No tool calls → emit `final`, stop.
    - Tool calls → for each: emit `tool_call`, run it over the session, emit
