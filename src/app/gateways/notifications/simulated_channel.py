@@ -11,8 +11,8 @@ class SimulatedNotificationChannel(NotificationChannel):
 
     It intentionally sends nothing: the notification tool demonstrates the agent
     loop without wiring a real email/SMS provider. The ``simulation`` log flag
-    makes that explicit. Swapping in a real channel is a new NotificationChannel,
-    not an edit here (Open/Closed).
+    makes that explicit. A real channel is a new NotificationChannel beside this
+    one, so this simulation stays available to the tests.
     """
 
     async def send(self, *, recipient: str, message: str) -> NotificationReceipt:

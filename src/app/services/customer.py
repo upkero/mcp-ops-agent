@@ -14,7 +14,7 @@ class CustomerService:
     Chooses the right gateway call based on the input shape (UUID → direct
     fetch, otherwise a name search), and always returns a uniform list so the
     caller need not care which path ran. Depends on the CustomerGateway
-    interface only (Dependency Inversion).
+    interface only, so a test needs no HTTP.
     """
 
     def __init__(self, *, customers: CustomerGateway) -> None:

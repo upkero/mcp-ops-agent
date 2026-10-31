@@ -8,8 +8,7 @@ class NotificationChannel(ABC):
 
     One implementation today, the simulated channel; the port is also the test
     seam. NotificationService calls ``send`` without knowing which channel it
-    holds. Adding a real email/SMS channel later is a new implementation, not
-    an edit to the service (Open/Closed).
+    holds, so a real email/SMS channel added later leaves the service untouched.
     """
 
     @abstractmethod

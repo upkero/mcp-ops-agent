@@ -91,8 +91,8 @@ somebody else's service over the network.
 - **Delivery port, one simulated implementation** — `NotificationChannel` (a real
   email/SMS channel is a new implementation, but read the notification limits under
   [Exposing this service](#exposing-this-service) first).
-- **Dependency Inversion** throughout — services depend on interfaces; the DI container
-  in `bootstrap/container.py` wires concretes.
+- **Services depend on interfaces** — the DI container in `bootstrap/container.py`
+  wires the concretes, so a test swaps in a fake without patching anything.
 
 ## Run locally
 

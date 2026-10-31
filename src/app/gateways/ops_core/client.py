@@ -28,8 +28,8 @@ def create_ops_core_http_client(
 
     One shared client (base URL, X-API-Key header, timeout) is injected into every
     ops-core gateway adapter: one connection pool and one auth config for all of
-    them (DRY), mirroring how ``create_llm_client`` centralises SDK construction. ``transport``
-    is for tests: it replaces the network, and the instrumentation still wraps it.
+    them, so a key rotation or timeout change is made once. ``transport`` is for
+    tests: it replaces the network, and the instrumentation still wraps it.
     """
     client = httpx.AsyncClient(
         base_url=settings.base_url.rstrip("/"),

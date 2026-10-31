@@ -16,7 +16,7 @@ async def ops_core_get(
     attempts: int,
     params: Mapping[str, str | int] | None = None,
 ) -> httpx.Response:
-    """Shared GET for every ops-core gateway (DRY): retry + uniform error mapping.
+    """The one GET every ops-core gateway uses, so retries and error mapping are the same for all.
 
     A 404 means the caller asked for something that does not exist and is a typed
     OpsCoreNotFoundError. Use ``ops_core_get_optional`` where absence is an

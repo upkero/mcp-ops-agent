@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 class AvailabilityService:
     """Business logic for calendar availability checks.
 
-    Depends only on the AvailabilityGateway *interface* (Dependency Inversion):
-    a real HTTP adapter in production, an AsyncMock in unit tests. It turns a raw
+    Depends only on the AvailabilityGateway interface, so it runs on the real HTTP
+    adapter in production and on an AsyncMock in unit tests. It turns a raw
     slot list into a decision the agent can act on — matched? available? which
     other times are free — rather than passing the wire data through untouched.
     """

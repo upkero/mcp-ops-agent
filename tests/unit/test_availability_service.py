@@ -7,7 +7,7 @@ from src.app.services.availability import AvailabilityService
 
 
 def _service(slots: list[AvailabilitySlot]) -> tuple[AvailabilityService, AsyncMock]:
-    repo = AsyncMock(spec=AvailabilityGateway)  # spec => Liskov-safe double
+    repo = AsyncMock(spec=AvailabilityGateway)  # spec: a call the real port lacks fails the test
     repo.list_slots.return_value = slots
     return AvailabilityService(availability=repo), repo
 

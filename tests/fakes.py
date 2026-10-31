@@ -1,7 +1,7 @@
 """Reusable fakes (not collected — no ``test_`` prefix).
 
-Kept Liskov-safe: each double implements the real interface, so it can stand in
-for the production object anywhere the interface is expected.
+Each double implements the real interface, so it can stand in for the
+production object anywhere the interface is expected.
 """
 
 import asyncio

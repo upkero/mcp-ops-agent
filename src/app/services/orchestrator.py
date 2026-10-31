@@ -88,11 +88,11 @@ class OrchestratorService:
 
     ``run`` is the loop (list tools → think → call tools → repeat → answer) and
     yields an AgentEvent per observable step, so the SSE route can stream the
-    agent "thinking" to the browser. Depends only on the
-    LLMClient and ToolGateway *interfaces* (Dependency Inversion): a scripted LLM
-    stub + fake gateway in unit tests, the real client + Streamable-HTTP gateway
-    in production — the same loop either way. Every tool call goes through the MCP
-    session, so nothing is executed outside the protocol.
+    agent "thinking" to the browser. Depends only on the LLMClient and
+    ToolGateway interfaces, so the same loop runs on a scripted LLM stub + fake
+    gateway in unit tests and on the real client + Streamable-HTTP gateway in
+    production. Every tool call goes through the MCP session, so nothing is
+    executed outside the protocol.
 
     A run is bounded four ways: steps, a wall-clock deadline, tool calls per step and
     notifications per run. Output length is capped by LLM_MAX_TOKENS, and how the run
