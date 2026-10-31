@@ -82,7 +82,7 @@ is a deliberate simulation (`gateways/notifications/simulated_channel.py`, a
 ## Errors
 
 Typed exceptions inherit `BaseAppException` (`status_code` / `error_code` / `detail`). The
-shared `ops_core_get` helper retries transport errors, 5xx, and 429/503 (honouring
+shared `ops_core_get` helper retries transport errors, 5xx, and 429 (honouring
 `Retry-After`), maps a surviving 404 to `OpsCoreNotFoundError` and any other error
 response to `OpsCoreUnavailableError` (502). Because the SSE response has already started
 when the loop runs, failures during a run are delivered as a terminal `error` **event**,
