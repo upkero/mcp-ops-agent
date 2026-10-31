@@ -151,10 +151,9 @@ class OpenAICompatibleLLMClient(LLMClient):
         Token counts, finish reason, tool-call count and cost only: never the prompt,
         the reply or a tool's arguments.
         """
-        metadata = response.metadata or {}
         span.set_attribute("gen_ai.response.model", response.model or self.model_name)
-        if "id" in metadata:
-            span.set_attribute("gen_ai.response.id", str(metadata["id"]))
+        if (completion_id := getattr(completion, "id", None)) is not None:
+            span.set_attribute("gen_ai.response.id", str(completion_id))
         if response.finish_reason is not None:
             span.set_attribute("gen_ai.response.finish_reasons", [response.finish_reason])
             metrics.finish_reasons.add(1, {"finish_reason": response.finish_reason})
@@ -212,7 +211,6 @@ class OpenAICompatibleLLMClient(LLMClient):
             model=getattr(completion, "model", None) or self.model_name,
             finish_reason=getattr(choice, "finish_reason", None),
             usage=self._usage_to_mapping(getattr(completion, "usage", None)),
-            metadata=self._metadata(completion),
             tool_calls=tool_calls,
         )
 
@@ -250,14 +248,3 @@ class OpenAICompatibleLLMClient(LLMClient):
             if isinstance(value, int):
                 result[field] = value
         return result or None
-
-    @staticmethod
-    def _metadata(completion: Any) -> Mapping[str, object]:
-        metadata: dict[str, object] = {}
-        completion_id = getattr(completion, "id", None)
-        created = getattr(completion, "created", None)
-        if completion_id is not None:
-            metadata["id"] = completion_id
-        if created is not None:
-            metadata["created"] = created
-        return metadata

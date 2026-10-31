@@ -21,4 +21,3 @@ class LLMMessage:
     tool_calls: tuple[ToolCall, ...] = field(default_factory=tuple)
     # Set only on tool-result turns (role="tool").
     tool_call_id: str | None = None
-    name: str | None = None

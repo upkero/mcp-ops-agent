@@ -247,9 +247,7 @@ class OrchestratorService:
             )
         )
         # Feed the result back so the model can reason over it on the next turn.
-        messages.append(
-            LLMMessage(role="tool", content=outcome.content, tool_call_id=call.id, name=call.name)
-        )
+        messages.append(LLMMessage(role="tool", content=outcome.content, tool_call_id=call.id))
 
     async def _execute(
         self,
