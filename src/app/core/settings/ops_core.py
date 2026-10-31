@@ -45,6 +45,4 @@ class OpsCoreSettings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_ops_core_settings() -> OpsCoreSettings:
-    # Required fields come from the environment. The pydantic mypy plugin knows
-    # that, so no suppression is needed here.
     return OpsCoreSettings()

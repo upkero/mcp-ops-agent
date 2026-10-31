@@ -1,4 +1,4 @@
-"""Customer data stays out of the log lines that used to carry it (OBSERVABILITY-AUDIT F7)."""
+"""Customer data stays out of the log lines and spans."""
 
 import logging
 from collections.abc import Iterator
@@ -63,7 +63,7 @@ def configured_logging(caplog: pytest.LogCaptureFixture) -> Iterator[None]:
 async def test_a_customer_search_leaves_no_name_in_any_log_record_or_span(
     caplog: pytest.LogCaptureFixture, spans: InMemorySpanExporter
 ) -> None:
-    """Sanity audit M1: the httpx request line and the span's `url.full` both carried `?search=<name>`."""
+    """A search URL carries `?search=<name>`: neither the httpx request line nor the span's `url.full` may keep it."""
     transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"items": []}))
     client = create_ops_core_http_client(OpsCoreSettings(api_key="test-ops-core-key-1234567890"), transport=transport)
 

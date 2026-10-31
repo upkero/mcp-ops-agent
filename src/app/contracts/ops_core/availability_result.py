@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class AvailabilityResult:
-    """Booking service output: is a specific date/time/resource free?
+    """AvailabilityService output: is a specific date/time/resource free?
 
     Carries enough for the agent to act on: whether a slot exists at all
     (``matched``), whether it is free (``available``), and — when it is not —

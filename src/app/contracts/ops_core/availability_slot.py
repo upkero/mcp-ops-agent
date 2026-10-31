@@ -6,7 +6,7 @@ class AvailabilitySlot:
     """A bookable calendar slot as returned by ops-core-api /booking-slots.
 
     Times are kept as the wire strings (``"18:00:00"``); interpreting them is the
-    booking service's job, not this DTO's.
+    AvailabilityService's job, not this DTO's.
     """
 
     slot_id: str

@@ -1,9 +1,9 @@
 """Metric instruments, defined once.
 
-Names and labels follow OBSERVABILITY-AUDIT §1.4. A label is a bounded set (an
-outcome, a tool the server advertises, a model), never a prompt, an id or an
-exception message. The instruments are created at import against the global meter,
-which binds to the real provider as soon as `core.telemetry.setup_metrics` installs it.
+A label is a bounded set (an outcome, a tool the server advertises, a model), never
+a prompt, an id or an exception message, so the number of series stays fixed. The
+instruments are created at import against the global meter, which binds to the real
+provider as soon as `core.telemetry.setup_metrics` installs it.
 """
 
 from opentelemetry import metrics
