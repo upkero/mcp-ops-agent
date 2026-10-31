@@ -6,6 +6,7 @@ but the request still travels the real MCP protocol into the FastMCP server and
 out to a service backed by a mocked gateway.
 """
 
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,9 +14,12 @@ from mcp.shared.memory import create_connected_server_and_client_session
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.ops_core.availability_slot import AvailabilitySlot
+from src.app.contracts.ops_core.customer import Customer
+from src.app.contracts.ops_core.price_quote import PriceQuote
 from src.app.interfaces.notifications.channel import NotificationChannel
 from src.app.interfaces.ops_core.availability import AvailabilityGateway
 from src.app.interfaces.ops_core.customers import CustomerGateway
+from src.app.interfaces.ops_core.pricing import PricingGateway
 from src.app.mcp.v1.server import build_mcp_server
 
 _EXPECTED_TOOLS = {
@@ -134,3 +138,37 @@ async def test_tool_descriptions_are_written_for_the_model_not_the_developer() -
     for tool in tools:
         assert "FastMCP" not in (tool.description or ""), tool.name
         assert "JSON Schema" not in (tool.description or ""), tool.name
+
+
+async def test_quote_and_customer_payloads_keep_their_keys_and_exact_money() -> None:
+    pricing = AsyncMock(spec=PricingGateway)
+    pricing.quote.return_value = PriceQuote(
+        "Massage", Decimal("50.00"), 3, Decimal("150.00"), Decimal("10"), Decimal("15.00"), Decimal("135.00")
+    )
+    customers = AsyncMock(spec=CustomerGateway)
+    customers.search.return_value = [Customer("c1", "Anna Petrova", "active", None, "VIP")]
+    container = ApplicationContainer()
+    container.__dict__["pricing_gateway"] = pricing
+    container.__dict__["customer_gateway"] = customers
+    server = build_mcp_server(container)
+
+    async with create_connected_server_and_client_session(server._mcp_server) as session:
+        quote = await session.call_tool("calculate_quote", {"service": "Massage", "quantity": 3})
+        found = await session.call_tool("lookup_customer", {"name_or_id": "Anna"})
+
+    assert quote.structuredContent == {
+        "found": True,
+        "service_name": "Massage",
+        "unit_price": "50.00",
+        "quantity": 3,
+        "subtotal": "150.00",
+        "discount_percent": "10",
+        "discount_amount": "15.00",
+        "total": "135.00",
+    }
+    assert found.structuredContent == {
+        "count": 1,
+        "customers": [
+            {"id": "c1", "name": "Anna Petrova", "status": "active", "last_contact_at": None, "notes": "VIP"}
+        ],
+    }
