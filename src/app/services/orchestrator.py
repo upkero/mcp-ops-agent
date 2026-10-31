@@ -80,9 +80,9 @@ def _refused(reason: str) -> ToolCallOutcome:
 class OrchestratorService:
     """Agentic loop: an LLM that reaches tools through a real MCP client.
 
-    Template Method — ``run`` fixes the loop skeleton (list tools → think → call
-    tools → repeat → answer) and yields an AgentEvent per observable step, so the
-    SSE route can stream the agent "thinking" to the browser. Depends only on the
+    ``run`` is the loop (list tools → think → call tools → repeat → answer) and
+    yields an AgentEvent per observable step, so the SSE route can stream the
+    agent "thinking" to the browser. Depends only on the
     LLMClient and ToolGateway *interfaces* (Dependency Inversion): a scripted LLM
     stub + fake gateway in unit tests, the real client + Streamable-HTTP gateway
     in production — the same loop either way. Every tool call goes through the MCP
@@ -314,7 +314,7 @@ class OrchestratorService:
 
     @staticmethod
     def _to_openai_tool(tool: ToolDefinition) -> Mapping[str, object]:
-        # Bridge: MCP tool definition -> provider function-calling schema. The MCP
+        # MCP tool definition -> provider function-calling schema. The MCP
         # JSON Schema is passed through verbatim, so the tool is described exactly
         # once (on the server) and never re-declared here.
         return {

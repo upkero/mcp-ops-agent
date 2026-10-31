@@ -84,14 +84,13 @@ somebody else's service over the network.
 
 **Design patterns (named and commented in the code):**
 
-- **Factory** — `llm/factory.py`, `gateways/ops_core/client.py` (the only places the
-  SDK / HTTP clients are built).
+- **One place each client is built** — `llm/factory.py` builds the SDK client and
+  `gateways/ops_core/client.py` the ops-core HTTP client.
 - **Adapter** — the httpx `gateways/ops_core/*` adapters and
   `gateways/agent/mcp_tool_gateway.py` (an MCP client behind a plain interface).
-- **Strategy** — `NotificationChannel` (simulated now; a real email/SMS channel is a new
-  implementation, but read the notification limits under
+- **Delivery port, one simulated implementation** — `NotificationChannel` (a real
+  email/SMS channel is a new implementation, but read the notification limits under
   [Exposing this service](#exposing-this-service) first).
-- **Template Method** — the orchestrator's fixed `run()` loop skeleton.
 - **Dependency Inversion** throughout — services depend on interfaces; the DI container
   in `bootstrap/container.py` wires concretes.
 

@@ -7,7 +7,7 @@ from src.app.llm.openai_compatible_llm_client import OpenAICompatibleLLMClient
 
 
 def create_llm_client(settings: LLMSettings) -> OpenAICompatibleLLMClient:
-    """Factory — the only place `AsyncOpenAI` is instantiated.
+    """The only place `AsyncOpenAI` is built.
 
     Wires settings → raw SDK client → our wrapper, so the rest of the app depends
     on the LLMClient interface and never on the SDK directly.

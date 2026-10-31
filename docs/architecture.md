@@ -44,9 +44,9 @@ loopback round trip — negligible next to LLM latency — and avoids any shared
 concurrency or reconnect logic. (A session cannot be opened once at startup for a
 self-loopback: uvicorn finishes lifespan startup before it accepts connections.)
 
-## The agentic loop (Template Method)
+## The agentic loop
 
-`OrchestratorService.run(message)` fixes the skeleton and yields an `AgentEvent` per
+`OrchestratorService.run(message)` runs the loop and yields an `AgentEvent` per
 observable step:
 
 1. Open one MCP session; `list_tools()` → convert each to the provider's function-calling
@@ -77,7 +77,7 @@ reason — whose httpx adapters share a single client built by `gateways/ops_cor
 The ports are still shaped like data access on purpose, so `services/` cannot tell an HTTP
 call apart from a database read. The `send_notification` tool has no upstream endpoint and
 is a deliberate simulation (`gateways/notifications/simulated_channel.py`, a
-`NotificationChannel` **Strategy**).
+`NotificationChannel` delivery port, whose only implementation is simulated).
 
 ## Errors
 

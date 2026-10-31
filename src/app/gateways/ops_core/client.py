@@ -24,7 +24,7 @@ async def _inject_request_id(request: httpx.Request) -> None:
 def create_ops_core_http_client(
     settings: OpsCoreSettings, *, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
-    """Factory — the only place the ops-core-api HTTP client is constructed.
+    """The only place the ops-core-api HTTP client is built.
 
     One shared client (base URL, X-API-Key header, timeout) is injected into every
     ops-core gateway adapter: one connection pool and one auth config for all of

@@ -7,11 +7,11 @@ from src.app.services.customer import CustomerService
 class NotificationService:
     """Business logic for sending a notification.
 
-    Delegates the actual delivery to an interchangeable NotificationChannel
-    (Strategy) — the service picks *what* to send and *to whom*, the channel
-    decides *how*. The recipient must be one existing customer, resolved through
-    ops-core: free text is never forwarded, so a real channel added later cannot
-    be pointed at an arbitrary address or phone number.
+    Delegates the actual delivery to a NotificationChannel — the service picks
+    *what* to send and *to whom*, the channel decides *how*. The recipient must
+    be one existing customer, resolved through ops-core: free text is never
+    forwarded, so a real channel added later cannot be pointed at an arbitrary
+    address or phone number.
     """
 
     def __init__(self, *, channel: NotificationChannel, customers: CustomerService) -> None:
